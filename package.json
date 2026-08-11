@@ -1,0 +1,12 @@
+{
+  "name": "jemz-tetris",
+  "version": "1.0.0",
+  "description": "Jemz Tetris — a free retro arcade Tetris with solo and 2-4 player modes, four difficulties, high scores, retro sound and mobile controls.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes serve .",
+    "dev": "npx --yes serve ."
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0b0616">
+  <title>Jemz Tetris — Retro Arcade Block Game</title>
+  <meta name="description" content="Jemz Tetris — a free retro arcade Tetris with solo and 2-4 player modes, four difficulties, high scores and mobile controls.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='11' height='11' fill='%2300f0ff'/%3E%3Crect x='17' y='4' width='11' height='11' fill='%23d142f5'/%3E%3Crect x='4' y='17' width='11' height='11' fill='%23ffd447'/%3E%3Crect x='17' y='17' width='11' height='11' fill='%2335e07a'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/style.css">
+</head>
+<body>
+
+  <canvas id="bg-canvas" aria-hidden="true"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <!-- ============================ MAIN MENU ============================ -->
+  <main id="app">
+    <section id="screen-menu" class="screen active">
+      <div class="menu-wrap">
+        <header class="title-block">
+          <h1 class="game-title">
+            <span class="title-jemz">JEMZ</span>
+            <span class="title-tetris">TETRIS</span>
+          </h1>
+          <p class="title-sub">RETRO ARCADE BLOCK FALLS</p>
+        </header>
+
+        <nav class="menu-buttons" id="menu-buttons">
+          <button class="btn btn-primary" type="button" data-action="play" data-players="1">PLAY SOLO</button>
+          <button class="btn btn-primary" type="button" data-action="play" data-players="2">2 PLAYERS</button>
+          <button class="btn btn-primary" type="button" data-action="play" data-players="3">3 PLAYERS</button>
+          <button class="btn btn-primary" type="button" data-action="play" data-players="4">4 PLAYERS</button>
+          <button class="btn" type="button" data-action="online">ONLINE 2P</button>
+          <button class="btn" type="button" data-action="difficulty">DIFFICULTY</button>
+          <button class="btn" type="button" data-action="scores">HIGH SCORES</button>
+          <button class="btn" type="button" data-action="settings">SETTINGS</button>
+          <button class="btn" type="button" data-action="howto">HOW TO PLAY</button>
+        </nav>
+
+        <div class="menu-foot">
+          <span class="diff-badge" id="menu-difficulty">MODERATE</span>
+          <span class="menu-hint">SOUND: <b id="menu-sound">ON</b> · MUSIC: <b id="menu-music">ON</b></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================ DIFFICULTY ============================ -->
+    <section id="screen-difficulty" class="screen">
+      <div class="panel-wrap">
+        <h2 class="screen-title">SELECT DIFFICULTY</h2>
+        <div class="diff-grid">
+          <button class="diff-card" type="button" data-difficulty="easy">
+            <span class="diff-name easy">EASY</span>
+            <span class="diff-desc">Slow falling speed · beginner friendly</span>
+          </button>
+          <button class="diff-card" type="button" data-difficulty="moderate">
+            <span class="diff-name moderate">MODERATE</span>
+            <span class="diff-desc">Normal falling speed · classic feel</span>
+          </button>
+          <button class="diff-card" type="button" data-difficulty="hard">
+            <span class="diff-name hard">HARD</span>
+            <span class="diff-desc">Faster falling · serious challenge</span>
+          </button>
+          <button class="diff-card" type="button" data-difficulty="extreme">
+            <span class="diff-name extreme">EXTREME</span>
+            <span class="diff-desc">Very fast · for skilled players</span>
+          </button>
+        </div>
+        <button class="btn" type="button" data-action="menu">BACK</button>
+      </div>
+    </section>
+
+    <!-- ============================ HIGH SCORES ============================ -->
+    <section id="screen-scores" class="screen">
+      <div class="panel-wrap">
+        <h2 class="screen-title">HIGH SCORES</h2>
+        <div class="score-filters" id="score-filters">
+          <button class="btn btn-tab active" type="button" data-filter="">ALL</button>
+          <button class="btn btn-tab" type="button" data-filter="easy">EASY</button>
+          <button class="btn btn-tab" type="button" data-filter="moderate">MODERATE</button>
+          <button class="btn btn-tab" type="button" data-filter="hard">HARD</button>
+          <button class="btn btn-tab" type="button" data-filter="extreme">EXTREME</button>
+        </div>
+        <div class="table-wrap">
+          <table class="scores-table">
+            <thead>
+              <tr><th>RANK</th><th>PLAYER</th><th>SCORE</th><th>LINES</th><th>DIFFICULTY</th></tr>
+            </thead>
+            <tbody id="scores-body"></tbody>
+          </table>
+        </div>
+        <button class="btn" type="button" data-action="menu">BACK</button>
+      </div>
+    </section>
+
+    <!-- ============================ SETTINGS ============================ -->
+    <section id="screen-settings" class="screen">
+      <div class="panel-wrap settings-wrap">
+        <h2 class="screen-title">SETTINGS</h2>
+
+        <div class="setting-row">
+          <span class="setting-label">SOUND EFFECTS</span>
+          <button class="btn btn-toggle" id="set-sound" type="button" data-toggle="sound">ON</button>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">BACKGROUND MUSIC</span>
+          <button class="btn btn-toggle" id="set-music" type="button" data-toggle="music">ON</button>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">VOLUME <span id="volume-value" class="dim">70%</span></span>
+          <input type="range" id="set-volume" min="0" max="100" value="70" aria-label="Volume">
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">CRT EFFECT</span>
+          <button class="btn btn-toggle" id="set-crt" type="button" data-toggle="crt">ON</button>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">PLAYER NAME</span>
+          <input type="text" id="set-name" maxlength="12" placeholder="PLAYER" aria-label="Player name">
+        </div>
+
+        <h3 class="setting-subtitle">CONTROLS</h3>
+        <p class="setting-note">Click a key to change it, then press the new key. Player 1 keys also control the touch pad target when playing together on one device.</p>
+        <div id="controls-table"></div>
+
+        <h3 class="setting-subtitle">DATA</h3>
+        <button class="btn btn-danger" id="btn-reset-data" type="button">RESET SAVED DATA</button>
+
+        <button class="btn" type="button" data-action="menu">BACK</button>
+      </div>
+    </section>
+
+    <!-- ============================ HOW TO PLAY ============================ -->
+    <section id="screen-howto" class="screen">
+      <div class="panel-wrap">
+        <h2 class="screen-title">HOW TO PLAY</h2>
+        <div class="howto-scroll">
+          <h3 class="setting-subtitle">THE GOAL</h3>
+          <p class="howto-text">Arrange falling blocks into complete horizontal lines. A full line disappears and scores points. The game ends when blocks stack to the top.</p>
+
+          <h3 class="setting-subtitle">SCORING</h3>
+          <p class="howto-text">1 line = 100 × level · 2 lines = 300 × level · 3 lines = 500 × level · <b>TETRIS (4 lines) = 800 × level</b>. Soft drop adds 1 point per cell, hard drop adds 2 per cell. Every 10 lines raises your level and speeds up the game.</p>
+
+          <h3 class="setting-subtitle">CONTROLS</h3>
+          <div id="howto-controls"></div>
+          <p class="howto-text">HOLD stores a piece for later. The ghost outline shows where the piece will land. Multiplayer: the last player standing wins — beaten players are ranked by when they topped out, ties broken by score.</p>
+
+          <h3 class="setting-subtitle">ONLINE (2 PLAYERS)</h3>
+          <p class="howto-text">Choose 2 PLAYERS → TWO DEVICES · ONLINE. One device creates a room, the other joins with the code. No account needed — rooms connect directly via WebRTC. Both players race; the first to top out loses.</p>
+        </div>
+        <button class="btn" type="button" data-action="menu">BACK</button>
+      </div>
+    </section>
+
+    <!-- ============================ GAME ============================ -->
+    <section id="screen-game" class="screen">
+      <div id="game-topbar" class="game-topbar"></div>
+      <div id="arena" class="arena"></div>
+      <div id="touchpad" class="touchpad hidden">
+        <div id="touchpad-select" class="touchpad-select hidden"></div>
+        <div class="touchpad-row">
+          <button class="btn tbtn" type="button" data-touch="hold" aria-label="Hold">HOLD</button>
+          <button class="btn tbtn" type="button" data-touch="left" aria-label="Move left">◀</button>
+          <button class="btn tbtn" type="button" data-touch="rotate" aria-label="Rotate">⟳</button>
+          <button class="btn tbtn" type="button" data-touch="right" aria-label="Move right">▶</button>
+        </div>
+        <div class="touchpad-row">
+          <button class="btn tbtn" type="button" data-touch="softdrop" aria-label="Soft drop">▼</button>
+          <button class="btn tbtn" type="button" data-touch="harddrop" aria-label="Hard drop">⤓</button>
+          <button class="btn tbtn" type="button" data-touch="pause" aria-label="Pause">⏸</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================ OVERLAYS ============================ -->
+  <div id="overlay-pause" class="overlay">
+    <div class="overlay-card">
+      <h2 class="overlay-title">PAUSED</h2>
+      <button class="btn btn-primary" type="button" data-action="resume">RESUME</button>
+      <button class="btn" type="button" data-action="restart">RESTART</button>
+      <button class="btn" type="button" data-action="quit">MAIN MENU</button>
+    </div>
+  </div>
+
+  <div id="overlay-gameover" class="overlay">
+    <div class="overlay-card">
+      <h2 class="overlay-title gameover-title">GAME OVER</h2>
+      <div class="overlay-stats">
+        <div class="stat big"><span class="stat-label">SCORE</span><span class="stat-value" id="gameover-score">000000</span></div>
+        <div class="stat big"><span class="stat-label">LINES</span><span class="stat-value" id="gameover-lines">0</span></div>
+        <div class="stat big"><span class="stat-label">LEVEL</span><span class="stat-value" id="gameover-level">1</span></div>
+      </div>
+      <div id="gameover-name-row" class="name-row hidden">
+        <input type="text" id="gameover-name" maxlength="12" placeholder="ENTER YOUR NAME" aria-label="Your name for the high score table">
+        <button class="btn btn-primary" type="button" data-action="save-score">SAVE SCORE</button>
+      </div>
+      <p class="new-best" id="gameover-newbest">NEW HIGH SCORE!</p>
+      <button class="btn btn-primary" type="button" data-action="again">PLAY AGAIN</button>
+      <button class="btn" type="button" data-action="quit">MAIN MENU</button>
+    </div>
+  </div>
+
+  <div id="overlay-victory" class="overlay">
+    <div class="overlay-card">
+      <h2 class="overlay-title victory-title" id="victory-title">WINNER!</h2>
+      <div id="victory-list" class="victory-list"></div>
+      <button class="btn btn-primary" type="button" data-action="again">PLAY AGAIN</button>
+      <button class="btn" type="button" data-action="quit">MAIN MENU</button>
+    </div>
+  </div>
+
+  <div id="overlay-online" class="overlay">
+    <div class="overlay-card">
+      <h2 class="overlay-title">ONLINE 2P</h2>
+      <div class="online-status" id="online-status">CONNECTING…</div>
+      <div class="online-lobby" id="online-lobby">
+        <div class="online-col">
+          <p class="online-label">CREATE A ROOM</p>
+          <input type="text" id="online-name" maxlength="12" placeholder="YOUR NAME" aria-label="Your name">
+          <button class="btn btn-primary" type="button" data-action="online-create">CREATE ROOM</button>
+          <p class="online-code" id="online-code">CODE: —</p>
+        </div>
+        <div class="online-col">
+          <p class="online-label">JOIN A ROOM</p>
+          <input type="text" id="online-join-code" maxlength="12" placeholder="ROOM CODE" aria-label="Room code">
+          <button class="btn btn-primary" type="button" data-action="online-join">JOIN ROOM</button>
+        </div>
+      </div>
+      <button class="btn btn-primary hidden" id="online-start" type="button" data-action="online-start">START MATCH</button>
+      <button class="btn" type="button" data-action="close-online">CANCEL</button>
+    </div>
+  </div>
+
+  <div id="overlay-countdown" class="overlay countdown-overlay">
+    <div class="countdown-num" id="countdown-num">3</div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- CRT effect -->
+  <div id="crt" class="crt" aria-hidden="true"></div>
+
+  <!-- PeerJS for free 2-device online play -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
