@@ -468,6 +468,32 @@ body {
   justify-content: center;
 }
 
+.scores-status {
+  text-align: center;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  padding: 2px 0 2px;
+}
+
+.scores-status.live {
+  color: var(--green);
+  text-shadow: 0 0 6px rgba(58, 240, 130, 0.5);
+}
+
+.scores-status.live::before {
+  content: '●';
+  display: inline-block;
+  margin-right: 6px;
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
 .table-wrap {
   overflow-x: auto;
   border: 2px solid var(--line);
