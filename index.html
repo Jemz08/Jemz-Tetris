@@ -31,10 +31,8 @@
 
         <nav class="menu-buttons" id="menu-buttons">
           <button class="btn btn-primary" type="button" data-action="play" data-players="1">PLAY SOLO</button>
-          <button class="btn btn-primary" type="button" data-action="play" data-players="2">2 PLAYERS</button>
-          <button class="btn btn-primary" type="button" data-action="play" data-players="3">3 PLAYERS</button>
-          <button class="btn btn-primary" type="button" data-action="play" data-players="4">4 PLAYERS</button>
-          <button class="btn" type="button" data-action="online">ONLINE 2P</button>
+          <button class="btn btn-primary" type="button" data-action="multi">MULTIPLAYER</button>
+          <button class="btn btn-primary" type="button" data-action="online">ONLINE 2P · ROOM CODE</button>
           <button class="btn" type="button" data-action="difficulty">DIFFICULTY</button>
           <button class="btn" type="button" data-action="scores">HIGH SCORES</button>
           <button class="btn" type="button" data-action="settings">SETTINGS</button>
@@ -44,7 +42,42 @@
         <div class="menu-foot">
           <span class="diff-badge" id="menu-difficulty">MODERATE</span>
           <span class="menu-hint">SOUND: <b id="menu-sound">ON</b> · MUSIC: <b id="menu-music">ON</b></span>
+          <span class="menu-note">2–4P = LOCAL (same device) · ONLINE 2P = room code invite</span>
         </div>
+      </div>
+    </section>
+
+    <!-- ============================ MULTIPLAYER ============================ -->
+    <section id="screen-multi" class="screen">
+      <div class="panel-wrap">
+        <h2 class="screen-title">MULTIPLAYER</h2>
+        <p class="multi-note">Two ways to play with friends — pick how:</p>
+
+        <div class="multi-grid">
+          <div class="multi-card">
+            <h3 class="multi-title local">LOCAL · ONE DEVICE</h3>
+            <p class="multi-desc">2–4 players share the same screen. Each player uses their own keys (shown below). On touch screens, tap the player tab above the pad to switch who the pad controls.</p>
+            <div class="multi-actions">
+              <button class="btn btn-primary" type="button" data-action="play" data-players="2">2P LOCAL</button>
+              <button class="btn btn-primary" type="button" data-action="play" data-players="3">3P LOCAL</button>
+              <button class="btn btn-primary" type="button" data-action="play" data-players="4">4P LOCAL</button>
+            </div>
+          </div>
+
+          <div class="multi-card">
+            <h3 class="multi-title online">ONLINE · TWO DEVICES</h3>
+            <p class="multi-desc">Race a friend on another phone or PC. One device creates a room and shares the CODE — the other joins with it. No account, no sign-up, free.</p>
+            <div class="multi-actions">
+              <button class="btn btn-primary" type="button" data-action="online">ONLINE 2P · ROOM CODE</button>
+            </div>
+          </div>
+        </div>
+
+        <h3 class="setting-subtitle">LOCAL PLAYER KEYS</h3>
+        <div id="multi-controls"></div>
+        <p class="multi-note dim">Every key shown here is remappable in SETTINGS → CONTROLS.</p>
+
+        <button class="btn" type="button" data-action="menu">BACK</button>
       </div>
     </section>
 
@@ -149,8 +182,9 @@
           <div id="howto-controls"></div>
           <p class="howto-text">HOLD stores a piece for later. The ghost outline shows where the piece will land. Multiplayer: the last player standing wins — beaten players are ranked by when they topped out, ties broken by score.</p>
 
-          <h3 class="setting-subtitle">ONLINE (2 PLAYERS)</h3>
-          <p class="howto-text">Choose 2 PLAYERS → TWO DEVICES · ONLINE. One device creates a room, the other joins with the code. No account needed — rooms connect directly via WebRTC. Both players race; the first to top out loses.</p>
+          <h3 class="setting-subtitle">MULTIPLAYER</h3>
+          <p class="howto-text"><b>LOCAL (2–4 PLAYERS, ONE DEVICE):</b> From the main menu choose MULTIPLAYER → LOCAL, then pick 2, 3 or 4 players. Each player uses their own keys — see the LOCAL PLAYER KEYS table (every key is remappable in SETTINGS → CONTROLS). On a touch screen, tap the player tab above the touch pad to switch who the pad controls.</p>
+          <p class="howto-text"><b>ONLINE (2 PLAYERS, TWO DEVICES):</b> Choose ONLINE 2P · ROOM CODE. One device taps CREATE ROOM and shares the CODE (use the COPY CODE button); the other taps JOIN ROOM and types the code in. No account or sign-up needed — rooms connect directly via WebRTC. Both players race; the first to top out loses.</p>
         </div>
         <button class="btn" type="button" data-action="menu">BACK</button>
       </div>
@@ -164,14 +198,16 @@
         <div id="touchpad-select" class="touchpad-select hidden"></div>
         <div class="touchpad-row">
           <button class="btn tbtn" type="button" data-touch="hold" aria-label="Hold">HOLD</button>
-          <button class="btn tbtn" type="button" data-touch="left" aria-label="Move left">◀</button>
           <button class="btn tbtn" type="button" data-touch="rotate" aria-label="Rotate">⟳</button>
+          <button class="btn tbtn" type="button" data-touch="pause" aria-label="Pause">⏸</button>
+        </div>
+        <div class="touchpad-row">
+          <button class="btn tbtn" type="button" data-touch="left" aria-label="Move left">◀</button>
+          <button class="btn tbtn" type="button" data-touch="harddrop" aria-label="Hard drop">⤓</button>
           <button class="btn tbtn" type="button" data-touch="right" aria-label="Move right">▶</button>
         </div>
         <div class="touchpad-row">
-          <button class="btn tbtn" type="button" data-touch="softdrop" aria-label="Soft drop">▼</button>
-          <button class="btn tbtn" type="button" data-touch="harddrop" aria-label="Hard drop">⤓</button>
-          <button class="btn tbtn" type="button" data-touch="pause" aria-label="Pause">⏸</button>
+          <button class="btn tbtn tbtn-wide" type="button" data-touch="softdrop" aria-label="Soft drop">▼ SOFT DROP</button>
         </div>
       </div>
     </section>
@@ -224,6 +260,7 @@
           <input type="text" id="online-name" maxlength="12" placeholder="YOUR NAME" aria-label="Your name">
           <button class="btn btn-primary" type="button" data-action="online-create">CREATE ROOM</button>
           <p class="online-code" id="online-code">CODE: —</p>
+          <button class="btn btn-small" type="button" data-action="online-copy">COPY CODE</button>
         </div>
         <div class="online-col">
           <p class="online-label">JOIN A ROOM</p>
