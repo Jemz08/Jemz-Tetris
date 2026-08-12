@@ -49,7 +49,7 @@ const FIREBASE_CONFIG = {
   appId: '1:1082495166730:web:2d77b7ead7da29ef3af2f3'
 };
 
-const COLLECTION = 'jemzTetrisScores';
+const COLLECTION = 'scores';
 const MAX_RESULTS = 20;
 
 let db = null;
