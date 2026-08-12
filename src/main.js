@@ -166,6 +166,7 @@ function syncSettingsUI() {
   $('set-name').value = settings.playerName;
   document.getElementById('crt').classList.toggle('on', settings.crt);
   buildControlsTable($('controls-table'), settings.controls, onRemap);
+  buildMultiControls();
   buildHowtoControls();
   renderScores();
   document.querySelectorAll('.diff-card').forEach((card) => {
@@ -177,6 +178,39 @@ function buildHowtoControls() {
   const wrap = $('howto-controls');
   wrap.innerHTML = '';
   buildControlsTable(wrap, settings.controls, () => {});
+}
+
+function buildMultiControls() {
+  const wrap = $('multi-controls');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  buildControlsTable(wrap, settings.controls, () => {});
+}
+
+function copyOnlineCode() {
+  const raw = $('online-code').textContent.replace('CODE: ', '').trim();
+  if (!raw || raw === '—') { showToast('CREATE A ROOM FIRST TO GET A CODE'); return; }
+  const done = () => showToast(`CODE COPIED: ${raw}`);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(raw).then(done).catch(() => fallbackCopy(raw, done));
+  } else {
+    fallbackCopy(raw, done);
+  }
+}
+
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { /* ignore */ }
+  document.body.removeChild(ta);
+  if (ok) done();
+  else showToast('COULD NOT COPY — TYPE THE CODE MANUALLY');
 }
 
 // ---------------------------------------------------------------- game lifecycle
@@ -224,6 +258,9 @@ function startGame(playerCount, opts = {}) {
   hideOverlay('victory');
   hideOverlay('online');
   hideOverlay('countdown');
+
+  resetCanvasSizes();
+  updateArenaHud(controller);
 
   controller.start();
 
@@ -500,7 +537,9 @@ function wireMenu() {
     else if (action === 'scores') { renderScores(); showScreen('scores'); }
     else if (action === 'settings') { syncSettingsUI(); showScreen('settings'); }
     else if (action === 'howto') { buildHowtoControls(); showScreen('howto'); }
+    else if (action === 'multi') { buildMultiControls(); showScreen('multi'); }
     else if (action === 'online') openOnlineLobby();
+    else if (action === 'online-copy') copyOnlineCode();
     else if (action === 'pause') togglePause();
     else if (action === 'resume') togglePause();
     else if (action === 'restart') { quitGame(); startGame(parseInt(currentMode === 'solo' ? '1' : currentMode, 10)); }

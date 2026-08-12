@@ -28,6 +28,8 @@ export function showScreen(name) {
 let canvases = new Map(); // playerIdx -> {canvas, ctx, cell}
 
 export function sizeCanvas(canvas) {
+  canvas.style.width = '';
+  canvas.style.height = '';
   const rect = canvas.getBoundingClientRect();
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const cell = Math.max(6, Math.floor(rect.width / COLS));
