@@ -4,6 +4,7 @@ import { COLORS } from './pieces.js';
 import { COLS, ROWS, HIDDEN } from './board.js';
 import { formatScore } from './scoring.js';
 import { loadScores, loadSettings } from './storage.js';
+import { fetchLeaderboard, subscribeLeaderboard, stopLiveLeaderboard, isOnlineLeaderboardConfigured } from './leaderboard.js';
 
 export const $ = (id) => document.getElementById(id);
 
@@ -21,6 +22,7 @@ export function showScreen(name) {
   const target = $(`screen-${name}`);
   if (target) target.classList.add('active');
   window.scrollTo(0, 0);
+  if (name !== 'scores') stopLiveLeaderboard();
 }
 
 // ---- canvas drawing ----------------------------------------------------
@@ -408,11 +410,9 @@ export function showToast(msg, ms = 2600) {
 
 // ---- high scores ----------------------------------------------------------
 
-export function renderScores(filter) {
-  const scores = loadScores();
+function renderScoreRows(list) {
   const tbody = $('scores-body');
   tbody.innerHTML = '';
-  const list = filter ? scores.filter((s) => s.difficulty === filter) : scores;
   if (!list.length) {
     const row = el('tr');
     const cell = el('td', '', 'NO SCORES YET — BE THE FIRST!');
@@ -421,7 +421,7 @@ export function renderScores(filter) {
     tbody.appendChild(row);
     return;
   }
-  list.slice(0, 10).forEach((s, i) => {
+  list.slice(0, 20).forEach((s, i) => {
     const row = el('tr');
     row.appendChild(el('td', '', String(i + 1)));
     row.appendChild(el('td', '', s.name));
@@ -429,6 +429,40 @@ export function renderScores(filter) {
     row.appendChild(el('td', 'num', String(s.lines)));
     row.appendChild(el('td', '', (s.difficulty || 'moderate').toUpperCase()));
     tbody.appendChild(row);
+  });
+}
+
+function setScoresStatus(text, live) {
+  const status = $('scores-status');
+  if (!status) return;
+  status.textContent = text;
+  status.classList.toggle('live', !!live);
+}
+
+export function renderScores(filter) {
+  // Show local scores immediately so the screen never looks empty/frozen.
+  const local = filter ? loadScores().filter((s) => s.difficulty === filter) : loadScores();
+  renderScoreRows(local);
+
+  if (!isOnlineLeaderboardConfigured()) {
+    setScoresStatus('LOCAL SCORES ONLY (THIS DEVICE)', false);
+    return;
+  }
+
+  setScoresStatus('CONNECTING TO SHARED LEADERBOARD…', false);
+  fetchLeaderboard(filter).then((shared) => {
+    if (shared) {
+      renderScoreRows(shared);
+      setScoresStatus('SHARED LEADERBOARD • LIVE', true);
+    } else {
+      setScoresStatus('OFFLINE — SHOWING LOCAL SCORES', false);
+    }
+  });
+
+  // Keep it fresh while the player is sitting on this screen.
+  subscribeLeaderboard(filter, (shared) => {
+    renderScoreRows(shared);
+    setScoresStatus('SHARED LEADERBOARD • LIVE', true);
   });
 }
 

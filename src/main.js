@@ -7,6 +7,7 @@ import {
   loadSettings, saveSettings, loadScores, submitScore, scoreQualifies,
   loadStats, saveStats, clearAllData
 } from './storage.js';
+import { submitToLeaderboard } from './leaderboard.js';
 import { DIFFICULTIES } from './scoring.js';
 import {
   $, showScreen, buildArena, updateArenaHud, setTopBar, showOverlay, hideOverlay,
@@ -392,7 +393,9 @@ function handleRoundOver(data) {
     return;
   }
 
-  // multiplayer / online round
+  // multiplayer / online round — every player who scored gets submitted to
+  // the shared online leaderboard (not just the winner), so friends playing
+  // on other devices/screens all show up.
   audio.victory();
   const winner = data.ranked[0];
   if (winner && winner.score > 0 && scoreQualifies(winner.score)) {
@@ -404,6 +407,33 @@ function handleRoundOver(data) {
       mode: currentMode
     });
   }
+  if (!onlineMatch) {
+    data.ranked.forEach((p) => {
+      if (p.score > 0) {
+        submitToLeaderboard({
+          name: p.name,
+          score: p.score,
+          lines: p.lines,
+          difficulty: gameDifficulty,
+          mode: currentMode
+        });
+      }
+    });
+  } else {
+    // Online 2P: each device only knows its own player for sure (id 0 is
+    // always "you" locally) — submit just that one to avoid both sides
+    // double-submitting the same match.
+    const me = data.ranked.find((p) => p.id === 0);
+    if (me && me.score > 0) {
+      submitToLeaderboard({
+        name: me.name,
+        score: me.score,
+        lines: me.lines,
+        difficulty: gameDifficulty,
+        mode: 'online'
+      });
+    }
+  }
   showVictory(data.ranked, currentMode);
   const againBtn = $('overlay-victory').querySelector('[data-action="again"]');
   if (againBtn) againBtn.classList.toggle('hidden', onlineMatch);
@@ -414,6 +444,9 @@ function saveScoreFromOverlay() {
   const name = ($('gameover-name').value || settings.playerName || 'PLAYER').toUpperCase().slice(0, 12);
   const p = controller.players[0];
   const entry = submitScore({ name, score: p.score, lines: p.lines, difficulty: gameDifficulty, mode: 'solo' });
+  // Always try the shared leaderboard too, even if this score didn't crack
+  // the local top 10 — it's a separate, bigger pool of every player.
+  submitToLeaderboard({ name, score: p.score, lines: p.lines, difficulty: gameDifficulty, mode: 'solo' });
   if (entry) {
     scoreSaved = true;
     showToast('SCORE SAVED!');
