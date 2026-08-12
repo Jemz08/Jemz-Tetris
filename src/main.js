@@ -29,11 +29,89 @@ let recordingRemap = null;
 let lastFrameSent = 0;
 
 const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+document.body.classList.toggle('is-touch', IS_TOUCH);
+document.body.classList.toggle('no-touch', !IS_TOUCH);
 
 audio.setVolume(settings.volume);
 audio.setSound(settings.sound);
 audio.setMusic(settings.music);
 setAudioRefs(audio);
+
+// ---------------------------------------------------------------- board fit
+
+// Measures the real space left for the board(s) after the topbar, touchpad,
+// and (for solo) the hold/next/high-score panel, then sets an exact pixel
+// max-width on each .pzone so the board always fills the actual screen
+// instead of being capped by a guessed static size.
+function fitBoard() {
+  const screenGame = $('screen-game');
+  if (!screenGame || !screenGame.classList.contains('active')) return;
+  const arena = $('arena');
+  const topbar = $('game-topbar');
+  const touchpad = $('touchpad');
+  const zones = arena.querySelectorAll('.pzone');
+  if (!zones.length) return;
+
+  const touchpadVisible = !touchpad.classList.contains('hidden');
+  const gcs = getComputedStyle(screenGame);
+  const gap = parseFloat(gcs.rowGap) || parseFloat(gcs.gap) || 0;
+  const padTop = parseFloat(gcs.paddingTop) || 0;
+  const padBottom = parseFloat(gcs.paddingBottom) || 0;
+
+  const reserved = padTop + padBottom
+    + topbar.offsetHeight
+    + (touchpadVisible ? touchpad.offsetHeight : 0)
+    + gap * (touchpadVisible ? 2 : 1);
+
+  // Use the real viewport height (not the container's own box, which can
+  // be inflated by its own not-yet-resized content) as the source of truth.
+  const viewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  const availH = Math.max(120, viewportH - reserved);
+
+  const sidePanel = arena.querySelector('.side-panel');
+  const sideStacked = sidePanel && getComputedStyle(sidePanel).flexDirection === 'row';
+  const sideExtraH = sidePanel && sideStacked ? sidePanel.offsetHeight + 10 : 0;
+  const sideExtraW = sidePanel && !sideStacked ? sidePanel.offsetWidth + 14 : 0;
+
+  // Each pzone also has its own header label and stats row stacked above/
+  // below the board itself — subtract those or the board gets sized too tall.
+  const firstZone = zones[0];
+  const zoneHead = firstZone.querySelector('.pzone-head');
+  const zoneStats = firstZone.querySelector('.pzone-stats');
+  const zoneChrome = (zoneHead ? zoneHead.offsetHeight : 0)
+    + (zoneStats ? zoneStats.offsetHeight : 0)
+    + 14; // pzone's own internal gaps
+
+  const boardAvailH = Math.max(100, availH - sideExtraH - zoneChrome);
+  const arenaW = arena.clientWidth - sideExtraW;
+  const cols = zones.length;
+  const gapTotal = 14 * Math.max(0, cols - 1);
+  const perBoardW = Math.max(60, (arenaW - gapTotal) / cols);
+
+  // Board grid is 10 wide x 20 tall, so height = 2 x width.
+  const widthFromHeight = boardAvailH / 2;
+  const boardW = Math.floor(Math.min(perBoardW, widthFromHeight));
+
+  zones.forEach((z) => { z.style.maxWidth = `${boardW}px`; });
+
+  // When the side panel sits beside the board (column layout, not stacked
+  // above it), cap its height to match the board's total height so it can
+  // never make the arena taller than the board itself; let it scroll
+  // internally in the rare case it doesn't all fit.
+  if (sidePanel) {
+    if (!sideStacked) {
+      const zoneTotalH = zoneChrome + boardW * 2;
+      sidePanel.style.maxHeight = `${zoneTotalH}px`;
+      sidePanel.style.overflowY = 'auto';
+    } else {
+      sidePanel.style.maxHeight = '';
+      sidePanel.style.overflowY = '';
+    }
+  }
+
+  resetCanvasSizes();
+  if (controller) updateArenaHud(controller);
+}
 
 // ---------------------------------------------------------------- audio wiring
 
@@ -253,6 +331,7 @@ function startGame(playerCount, opts = {}) {
   else $('touchpad').classList.add('hidden');
 
   showScreen('game');
+  fitBoard();
   hideOverlay('pause');
   hideOverlay('gameover');
   hideOverlay('victory');
@@ -661,8 +740,10 @@ function init() {
   showScreen('menu');
 
   window.addEventListener('resize', () => {
-    resetCanvasSizes();
-    if (controller) updateArenaHud(controller);
+    fitBoard();
+  });
+  window.addEventListener('orientationchange', () => {
+    setTimeout(fitBoard, 120);
   });
 
 }

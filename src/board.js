@@ -106,4 +106,3 @@ export class Board {
     return lines.join('');
   }
 }
-
