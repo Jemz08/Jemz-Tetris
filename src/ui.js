@@ -5,6 +5,7 @@ import { COLS, ROWS, HIDDEN } from './board.js';
 import { formatScore } from './scoring.js';
 import { loadScores, loadSettings } from './storage.js';
 import { fetchLeaderboard, subscribeLeaderboard, stopLiveLeaderboard, isOnlineLeaderboardConfigured } from './leaderboard.js';
+import { getTier } from './rank.js';
 
 export const $ = (id) => document.getElementById(id);
 
@@ -416,7 +417,7 @@ function renderScoreRows(list) {
   if (!list.length) {
     const row = el('tr');
     const cell = el('td', '', 'NO SCORES YET — BE THE FIRST!');
-    cell.colSpan = 5;
+    cell.colSpan = 6;
     row.appendChild(cell);
     tbody.appendChild(row);
     return;
@@ -425,6 +426,13 @@ function renderScoreRows(list) {
     const row = el('tr');
     row.appendChild(el('td', '', String(i + 1)));
     row.appendChild(el('td', '', s.name));
+    const tier = getTier(s.score || 0);
+    const tierCell = el('td');
+    const badge = el('span', 'rank-badge', tier.name);
+    badge.style.color = tier.color;
+    badge.style.borderColor = tier.color;
+    tierCell.appendChild(badge);
+    row.appendChild(tierCell);
     row.appendChild(el('td', 'num', formatScore(s.score)));
     row.appendChild(el('td', 'num', String(s.lines)));
     row.appendChild(el('td', '', (s.difficulty || 'moderate').toUpperCase()));
@@ -464,6 +472,33 @@ export function renderScores(filter) {
     renderScoreRows(shared);
     setScoresStatus('SHARED LEADERBOARD • LIVE', true);
   });
+}
+
+// ---- account -----------------------------------------------------------
+
+export function renderAccountUI(user) {
+  const signedOut = $('account-signed-out');
+  const signedIn = $('account-signed-in');
+  if (!signedOut || !signedIn) return;
+  if (user) {
+    signedOut.classList.add('hidden');
+    signedIn.classList.remove('hidden');
+    $('account-name').textContent = (user.displayName || user.email || 'PLAYER').toUpperCase();
+    const best = Math.max(0, ...loadScores().map((s) => s.score || 0), 0);
+    const tier = getTier(best);
+    const badge = $('account-rank');
+    badge.textContent = tier.name;
+    badge.style.color = tier.color;
+    badge.style.borderColor = tier.color;
+  } else {
+    signedOut.classList.remove('hidden');
+    signedIn.classList.add('hidden');
+  }
+}
+
+export function setAccountStatus(text) {
+  const status = $('account-status');
+  if (status) status.textContent = text || '';
 }
 
 // ---- settings helpers -----------------------------------------------------

@@ -8,12 +8,13 @@ import {
   loadStats, saveStats, clearAllData
 } from './storage.js';
 import { submitToLeaderboard } from './leaderboard.js';
+import { onAuthChange, signUpEmail, signInEmail, signInGoogle, signOutUser, getCurrentUser } from './auth.js';
 import { DIFFICULTIES } from './scoring.js';
 import {
   $, showScreen, buildArena, updateArenaHud, setTopBar, showOverlay, hideOverlay,
   showCountdown, showGameOver, showVictory, showToast, renderScores,
   buildControlsTable, prettyKey, updateTouchpad, touchTarget, setAudioRefs,
-  resetCanvasSizes
+  resetCanvasSizes, renderAccountUI, setAccountStatus
 } from './ui.js';
 
 // ---------------------------------------------------------------- state
@@ -412,6 +413,7 @@ function handleRoundOver(data) {
       if (p.score > 0) {
         submitToLeaderboard({
           name: p.name,
+          uid: p.id === 0 ? (getCurrentUser() && getCurrentUser().uid) : null,
           score: p.score,
           lines: p.lines,
           difficulty: gameDifficulty,
@@ -427,6 +429,7 @@ function handleRoundOver(data) {
     if (me && me.score > 0) {
       submitToLeaderboard({
         name: me.name,
+        uid: getCurrentUser() && getCurrentUser().uid,
         score: me.score,
         lines: me.lines,
         difficulty: gameDifficulty,
@@ -446,7 +449,14 @@ function saveScoreFromOverlay() {
   const entry = submitScore({ name, score: p.score, lines: p.lines, difficulty: gameDifficulty, mode: 'solo' });
   // Always try the shared leaderboard too, even if this score didn't crack
   // the local top 10 — it's a separate, bigger pool of every player.
-  submitToLeaderboard({ name, score: p.score, lines: p.lines, difficulty: gameDifficulty, mode: 'solo' });
+  submitToLeaderboard({
+    name,
+    uid: getCurrentUser() && getCurrentUser().uid,
+    score: p.score,
+    lines: p.lines,
+    difficulty: gameDifficulty,
+    mode: 'solo'
+  });
   if (entry) {
     scoreSaved = true;
     showToast('SCORE SAVED!');
@@ -563,6 +573,7 @@ function openOnlineLobby() {
   }
   $('online-status').textContent = 'READY — CREATE OR JOIN A ROOM';
   $('online-lobby').classList.remove('hidden');
+  $('online-lobby').classList.remove('room-created', 'joining');
   $('online-start').classList.add('hidden');
   $('online-code').textContent = 'CODE: —';
   showOverlay('online');
@@ -589,14 +600,17 @@ function sendOnlineFrame() {
   });
 }
 
-online.on('open', ({ code }) => {
+online.on('code', (code) => {
+  // Room exists — show the code prominently and let the host share it.
+  // Keep the lobby visible (don't hide it) so the code stays on screen.
+  $('online-code').textContent = `CODE: ${code.toUpperCase()}`;
+  $('online-status').textContent = 'SHARE THIS CODE — WAITING FOR RIVAL…';
+  $('online-lobby').classList.add('room-created');
+});
+
+online.on('connected', () => {
   $('online-lobby').classList.add('hidden');
-  if (code) {
-    $('online-code').textContent = `CODE: ${code.toUpperCase()}`;
-    $('online-status').textContent = 'WAITING FOR RIVAL…';
-  } else {
-    $('online-status').textContent = 'CONNECTING TO ROOM…';
-  }
+  $('online-status').textContent = 'CONNECTED — SYNCING…';
 });
 
 online.on('peer', () => {
@@ -633,6 +647,57 @@ online.on('error', (err) => {
     showToast('COULD NOT CONNECT TO PEERJS');
   }
 });
+
+// ---------------------------------------------------------------- account
+
+onAuthChange((user) => {
+  renderAccountUI(user);
+  if (user) {
+    const name = (user.displayName || user.email || 'PLAYER').toUpperCase().slice(0, 12);
+    settings.playerName = name;
+    saveSettings(settings);
+    const nameInput = $('set-name');
+    if (nameInput) nameInput.value = name;
+    setAccountStatus('');
+  }
+});
+
+async function handleSignIn() {
+  const email = ($('acct-email').value || '').trim();
+  const password = $('acct-password').value || '';
+  if (!email || !password) { setAccountStatus('ENTER EMAIL AND PASSWORD'); return; }
+  setAccountStatus('SIGNING IN…');
+  const res = await signInEmail(email, password);
+  if (!res.ok) { setAccountStatus(res.error); return; }
+  showToast('SIGNED IN!');
+  audio.click();
+}
+
+async function handleSignUp() {
+  const email = ($('acct-email').value || '').trim();
+  const password = $('acct-password').value || '';
+  if (!email || !password) { setAccountStatus('ENTER EMAIL AND PASSWORD'); return; }
+  const name = settings.playerName || 'PLAYER';
+  setAccountStatus('CREATING ACCOUNT…');
+  const res = await signUpEmail(email, password, name);
+  if (!res.ok) { setAccountStatus(res.error); return; }
+  showToast('ACCOUNT CREATED!');
+  audio.click();
+}
+
+async function handleGoogleSignIn() {
+  setAccountStatus('OPENING GOOGLE SIGN-IN…');
+  const res = await signInGoogle();
+  if (!res.ok) setAccountStatus(res.error);
+  // On success this navigates away to Google and back — onAuthChange
+  // picks it up automatically when the page reloads.
+}
+
+async function handleSignOut() {
+  await signOutUser();
+  showToast('SIGNED OUT');
+  audio.click();
+}
 
 // ---------------------------------------------------------------- menu wiring
 
@@ -672,6 +737,7 @@ function wireMenu() {
       if (!online.supported()) { showToast('ONLINE NEEDS INTERNET'); return; }
       const ok = online.createRoom($('online-name').value || settings.playerName || 'P1');
       if (!ok) showToast('PEERJS NOT AVAILABLE');
+      else $('online-status').textContent = 'CREATING ROOM…';
     }
     else if (action === 'online-join') {
       if (!online.supported()) { showToast('ONLINE NEEDS INTERNET'); return; }
@@ -679,12 +745,20 @@ function wireMenu() {
       if (!code.trim()) { showToast('ENTER A ROOM CODE'); return; }
       const ok = online.joinRoom(code, $('online-name').value || settings.playerName || 'P2');
       if (!ok) showToast('PEERJS NOT AVAILABLE');
+      else {
+        $('online-status').textContent = 'CONNECTING TO ROOM…';
+        $('online-lobby').classList.add('joining');
+      }
     }
     else if (action === 'online-start') {
       online.send('start', { difficulty: gameDifficulty });
       startOnlineMatch(gameDifficulty);
     }
     else if (action === 'close-online') { online.close(); hideOverlay('online'); }
+    else if (action === 'acct-signin') handleSignIn();
+    else if (action === 'acct-signup') handleSignUp();
+    else if (action === 'acct-google') handleGoogleSignIn();
+    else if (action === 'acct-signout') handleSignOut();
   });
 
   // difficulty cards

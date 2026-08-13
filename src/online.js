@@ -11,7 +11,7 @@ export class Online2P {
     this.myName = '';
     this.rivalName = 'RIVAL';
     this.connected = false;
-    this._handlers = { open: [], peer: [], message: [], close: [], error: [] };
+    this._handlers = { code: [], connected: [], peer: [], message: [], close: [], error: [] };
   }
 
   supported() {
@@ -40,7 +40,9 @@ export class Online2P {
     this.peer = new window.Peer(this._roomId(), this._peerOpts());
     this.peer.on('open', (id) => {
       this.roomCode = id;
-      this._emit('open', { code: id, host: true });
+      // The room exists and can be shared right away — this is NOT the
+      // same as a rival actually being connected yet.
+      this._emit('code', id);
     });
     this.peer.on('connection', (conn) => {
       if (this.conn) { try { conn.close(); } catch (e) {} return; }
@@ -86,7 +88,7 @@ export class Online2P {
     conn.on('open', () => {
       this.connected = true;
       this.send('meta', { name: this.myName });
-      this._emit('open', { code: this.roomCode, host: this.role === 'host' });
+      this._emit('connected', { host: this.role === 'host' });
     });
     conn.on('data', (msg) => {
       if (!msg || typeof msg !== 'object' || !msg.type) return;

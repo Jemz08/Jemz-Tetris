@@ -54,6 +54,7 @@ const MAX_RESULTS = 20;
 
 let db = null;
 let fs = null; // holds the imported firestore functions namespace
+let app = null;
 let initPromise = null;
 let unsubscribeLive = null;
 
@@ -74,7 +75,7 @@ async function init() {
         import('https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js'),
         import('https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore.js')
       ]);
-      const app = initializeApp(FIREBASE_CONFIG);
+      app = initializeApp(FIREBASE_CONFIG);
       fs = firestoreMod;
       db = fs.getFirestore(app);
       return db;
@@ -87,6 +88,13 @@ async function init() {
   return initPromise;
 }
 
+// Lets auth.js (and anything else) reuse the same Firebase app instance
+// instead of calling initializeApp() a second time.
+export async function getFirebaseApp() {
+  await init();
+  return app;
+}
+
 // Fire-and-forget submit — never blocks or breaks gameplay if it fails.
 export async function submitToLeaderboard(entry) {
   if (!isConfigured()) return false;
@@ -95,6 +103,7 @@ export async function submitToLeaderboard(entry) {
     if (!db) return false;
     await fs.addDoc(fs.collection(db, COLLECTION), {
       name: String(entry.name || 'PLAYER').toUpperCase().slice(0, 12),
+      uid: entry.uid || null,
       score: Math.max(0, Math.min(9999999, Math.round(entry.score || 0))),
       lines: Math.max(0, Math.round(entry.lines || 0)),
       difficulty: entry.difficulty || 'moderate',
