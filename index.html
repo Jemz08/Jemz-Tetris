@@ -122,7 +122,7 @@
         <div class="table-wrap">
           <table class="scores-table">
             <thead>
-              <tr><th>RANK</th><th>PLAYER</th><th>SCORE</th><th>LINES</th><th>DIFFICULTY</th></tr>
+              <tr><th>#</th><th>PLAYER</th><th>TIER</th><th>SCORE</th><th>LINES</th><th>DIFF.</th></tr>
             </thead>
             <tbody id="scores-body"></tbody>
           </table>
@@ -135,6 +135,27 @@
     <section id="screen-settings" class="screen">
       <div class="panel-wrap settings-wrap">
         <h2 class="screen-title">SETTINGS</h2>
+
+        <h3 class="setting-subtitle">ACCOUNT</h3>
+        <div id="account-signed-out" class="account-box">
+          <p class="setting-note">Sign in to keep your name, rank and scores with you on any device.</p>
+          <input type="email" id="acct-email" placeholder="EMAIL" autocomplete="email" aria-label="Email">
+          <input type="password" id="acct-password" placeholder="PASSWORD (6+ CHARACTERS)" autocomplete="current-password" aria-label="Password">
+          <div class="account-btn-row">
+            <button class="btn btn-primary" type="button" data-action="acct-signin">SIGN IN</button>
+            <button class="btn" type="button" data-action="acct-signup">CREATE ACCOUNT</button>
+          </div>
+          <div class="account-divider">OR</div>
+          <button class="btn btn-google" type="button" data-action="acct-google">CONTINUE WITH GOOGLE</button>
+          <p class="account-status" id="account-status"></p>
+        </div>
+        <div class="account-box hidden" id="account-signed-in">
+          <div class="account-me">
+            <span class="account-me-name" id="account-name">—</span>
+            <span class="rank-badge" id="account-rank">—</span>
+          </div>
+          <button class="btn" type="button" data-action="acct-signout">SIGN OUT</button>
+        </div>
 
         <div class="setting-row">
           <span class="setting-label">SOUND EFFECTS</span>
@@ -256,14 +277,14 @@
       <h2 class="overlay-title">ONLINE 2P</h2>
       <div class="online-status" id="online-status">CONNECTING…</div>
       <div class="online-lobby" id="online-lobby">
-        <div class="online-col">
+        <div class="online-col online-col-create">
           <p class="online-label">CREATE A ROOM</p>
           <input type="text" id="online-name" maxlength="12" placeholder="YOUR NAME" aria-label="Your name">
           <button class="btn btn-primary" type="button" data-action="online-create">CREATE ROOM</button>
           <p class="online-code" id="online-code">CODE: —</p>
           <button class="btn btn-small" type="button" data-action="online-copy">COPY CODE</button>
         </div>
-        <div class="online-col">
+        <div class="online-col online-col-join">
           <p class="online-label">JOIN A ROOM</p>
           <input type="text" id="online-join-code" maxlength="12" placeholder="ROOM CODE" aria-label="Room code">
           <button class="btn btn-primary" type="button" data-action="online-join">JOIN ROOM</button>
