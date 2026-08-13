@@ -523,6 +523,11 @@ body {
   white-space: nowrap;
 }
 
+.scores-table .rank-badge {
+  font-size: 8px;
+  padding: 3px 7px;
+}
+
 .scores-table td.num { color: var(--yellow); }
 .scores-table tr:nth-child(1) td { color: var(--green); }
 .scores-table tr:nth-child(2) td { color: var(--cyan); }
@@ -557,7 +562,9 @@ input[type="range"] {
   cursor: pointer;
 }
 
-input[type="text"] {
+input[type="text"],
+input[type="email"],
+input[type="password"] {
   background: rgba(4, 2, 12, 0.7);
   border: 2px solid var(--line-bright);
   border-radius: 8px;
@@ -570,7 +577,9 @@ input[type="text"] {
   text-transform: uppercase;
 }
 
-input[type="text"]:focus {
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus {
   outline: none;
   border-color: var(--cyan);
   box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
@@ -588,6 +597,94 @@ input[type="text"]:focus {
 .setting-note {
   color: var(--text-dim);
   font-size: 19px;
+}
+
+/* ---------- account ---------- */
+
+.account-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: rgba(4, 2, 12, 0.5);
+  margin-bottom: 6px;
+}
+
+.account-btn-row {
+  display: flex;
+  gap: 10px;
+}
+
+.account-btn-row .btn { flex: 1; }
+
+.account-divider {
+  text-align: center;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  position: relative;
+}
+
+.account-divider::before, .account-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 38%;
+  height: 1px;
+  background: var(--line);
+}
+
+.account-divider::before { left: 0; }
+.account-divider::after { right: 0; }
+
+.btn-google {
+  border-color: #ffffff33;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+}
+
+.btn-google:hover {
+  border-color: #fff;
+  color: #fff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
+}
+
+.account-status {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--yellow);
+  letter-spacing: 1px;
+  min-height: 12px;
+  text-align: center;
+}
+
+.account-me {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.account-me-name {
+  font-family: var(--font-pixel);
+  font-size: 13px;
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+  letter-spacing: 1px;
+}
+
+.rank-badge {
+  display: inline-block;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 1px;
+  padding: 4px 9px;
+  border: 1.5px solid currentColor;
+  border-radius: 20px;
+  color: var(--text-dim);
 }
 
 .controls-table {
@@ -1060,6 +1157,51 @@ input[type="text"]:focus {
   color: var(--cyan);
   text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
   min-height: 16px;
+}
+
+/* Once a room is created, the code is the important thing on screen —
+   grow it, keep it visible, and get the now-irrelevant "join" column
+   and spent "create" controls out of the way. */
+.online-lobby.room-created {
+  grid-template-columns: 1fr;
+}
+
+.online-lobby.room-created .online-col-join {
+  display: none;
+}
+
+.online-lobby.room-created #online-name,
+.online-lobby.room-created [data-action="online-create"] {
+  display: none;
+}
+
+.online-lobby.room-created .online-code {
+  font-size: 24px;
+  letter-spacing: 3px;
+  padding: 14px 10px;
+  border: 2px solid var(--cyan);
+  border-radius: 10px;
+  background: rgba(0, 240, 255, 0.08);
+  animation: code-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes code-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 240, 255, 0.25); }
+  50% { box-shadow: 0 0 20px rgba(0, 240, 255, 0.55); }
+}
+
+.online-lobby.joining {
+  grid-template-columns: 1fr;
+}
+
+.online-lobby.joining .online-col-create {
+  display: none;
+}
+
+.online-lobby.joining #online-join-code,
+.online-lobby.joining [data-action="online-join"] {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* countdown */
