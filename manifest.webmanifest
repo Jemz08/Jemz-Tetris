@@ -63,5 +63,28 @@
       "url": "./index.html?screen=settings",
       "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
     }
+  ],
+  "screenshots": [
+    {
+      "src": "assets/screenshots/screenshot-menu.jpg",
+      "sizes": "720x1288",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Main menu — solo, multiplayer, and online 2P modes"
+    },
+    {
+      "src": "assets/screenshots/screenshot-gameplay.jpg",
+      "sizes": "720x1288",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Solo gameplay on Extreme difficulty with hold, next, and touch controls"
+    },
+    {
+      "src": "assets/screenshots/screenshot-difficulty.jpg",
+      "sizes": "720x1288",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "Difficulty select — Easy, Moderate, Hard, Extreme"
+    }
   ]
 }
