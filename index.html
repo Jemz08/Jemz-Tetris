@@ -7,6 +7,13 @@
   <title>Jemz Tetris — Retro Arcade Block Game</title>
   <meta name="description" content="Jemz Tetris — a free retro arcade Tetris with solo and 2-4 player modes, four difficulties, high scores and mobile controls.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='11' height='11' fill='%2300f0ff'/%3E%3Crect x='17' y='4' width='11' height='11' fill='%23d142f5'/%3E%3Crect x='4' y='17' width='11' height='11' fill='%23ffd447'/%3E%3Crect x='17' y='17' width='11' height='11' fill='%2335e07a'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Jemz Tetris">
+  <meta name="mobile-web-app-capable" content="yes">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
@@ -307,5 +314,15 @@
   <!-- PeerJS for free 2-device online play -->
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script type="module" src="src/main.js"></script>
+  <script>
+    // Register the service worker so the game installs as a PWA and works offline.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch((err) => {
+          console.warn('Service worker registration failed:', err);
+        });
+      });
+    }
+  </script>
 </body>
 </html>
