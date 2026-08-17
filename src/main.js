@@ -845,6 +845,7 @@ function init() {
   syncSettingsUI();
   updateMenuBadges();
   showScreen('menu');
+  handleLaunchParams();
 
   window.addEventListener('resize', () => {
     fitBoard();
@@ -853,6 +854,26 @@ function init() {
     setTimeout(fitBoard, 120);
   });
 
+}
+
+// Handles ?screen=... launch params — used by the manifest's "shortcuts"
+// (home-screen long-press menu / right-click on desktop) so each shortcut
+// actually lands somewhere real instead of just reopening the main menu.
+function handleLaunchParams() {
+  const params = new URLSearchParams(window.location.search);
+  const target = params.get('screen');
+  if (!target) return;
+  if (target === 'play-solo') {
+    startGame(1);
+  } else if (target === 'scores') {
+    renderScores();
+    showScreen('scores');
+  } else if (target === 'settings') {
+    syncSettingsUI();
+    showScreen('settings');
+  }
+  // Clean the URL so refresh/reshare doesn't keep re-triggering the shortcut.
+  window.history.replaceState({}, '', window.location.pathname);
 }
 
 init();
