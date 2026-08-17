@@ -5,11 +5,16 @@
   "start_url": "./index.html",
   "scope": "./",
   "id": "/",
+  "lang": "en",
+  "dir": "ltr",
   "display": "standalone",
+  "display_override": ["standalone", "browser"],
   "orientation": "portrait-primary",
   "background_color": "#0b0616",
   "theme_color": "#0b0616",
   "categories": ["games", "entertainment"],
+  "prefer_related_applications": false,
+  "launch_handler": { "client_mode": "navigate-existing" },
   "icons": [
     {
       "src": "assets/icons/icon-192.png",
@@ -34,6 +39,29 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Play Solo",
+      "short_name": "Play Solo",
+      "description": "Jump straight into a solo game",
+      "url": "./index.html?screen=play-solo",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "High Scores",
+      "short_name": "Scores",
+      "description": "View the high score table",
+      "url": "./index.html?screen=scores",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Settings",
+      "short_name": "Settings",
+      "description": "Open sound, music and control settings",
+      "url": "./index.html?screen=settings",
+      "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
