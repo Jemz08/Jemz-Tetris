@@ -25,6 +25,9 @@
   --radius: 10px;
   --glow-cyan: 0 0 6px rgba(0, 240, 255, 0.8), 0 0 22px rgba(0, 240, 255, 0.35);
   --glow-magenta: 0 0 6px rgba(209, 66, 245, 0.8), 0 0 22px rgba(209, 66, 245, 0.35);
+  /* Drifts as your score climbs (set from JS in main.js updateColorTheme) —
+     starts at 258 (violet) to match the game's base look at score 0. */
+  --score-hue: 258;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -423,7 +426,7 @@ body {
   gap: 14px;
 }
 
-.diff-card {
+.diff-card, .vsbot-card {
   background: var(--panel-solid);
   border: 2px solid var(--line);
   border-radius: 12px;
@@ -433,10 +436,12 @@ body {
   gap: 10px;
   cursor: pointer;
   text-align: left;
+  font-family: inherit;
+  color: inherit;
   transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
-.diff-card:hover, .diff-card.active {
+.diff-card:hover, .diff-card.active, .vsbot-card:hover {
   transform: translateY(-2px);
   border-color: var(--cyan);
   box-shadow: 0 0 14px rgba(0, 240, 255, 0.25);
@@ -786,7 +791,7 @@ input[type="password"]:focus {
   overflow: hidden;
 }
 
-.arena.mode-2 { max-width: 900px; }
+.arena.mode-2, .arena.mode-bot { max-width: 900px; }
 .arena.mode-3, .arena.mode-4 { max-width: 1100px; }
 
 .pzone {
@@ -818,12 +823,13 @@ input[type="password"]:focus {
 .pzone-name {
   font-family: var(--font-pixel);
   font-size: 11px;
-  color: var(--cyan);
-  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+  color: hsl(var(--score-hue), 90%, 70%);
+  text-shadow: 0 0 8px hsla(var(--score-hue), 90%, 70%, 0.5);
   letter-spacing: 1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 400ms ease, text-shadow 400ms ease;
 }
 
 .pzone-status {
@@ -841,7 +847,8 @@ input[type="password"]:focus {
   border-radius: 10px;
   isolation: isolate;
   background: linear-gradient(180deg, rgba(30, 16, 58, 0.7), rgba(8, 4, 18, 0.9));
-  box-shadow: 0 0 18px rgba(0, 240, 255, 0.12), inset 0 0 24px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 18px hsla(var(--score-hue), 90%, 60%, 0.14), inset 0 0 24px rgba(0, 0, 0, 0.6);
+  transition: box-shadow 400ms ease;
 }
 
 .board-wrap::before {
@@ -875,7 +882,8 @@ input[type="password"]:focus {
   width: 100%;
   aspect-ratio: 1 / 2;
   image-rendering: pixelated;
-  filter: drop-shadow(0 0 6px rgba(0, 240, 255, 0.25));
+  filter: drop-shadow(0 0 6px hsla(var(--score-hue), 90%, 60%, 0.28));
+  transition: filter 400ms ease;
 }
 
 .pzone-stats {
