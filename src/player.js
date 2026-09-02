@@ -1,5 +1,6 @@
 // A single playable instance: owns a board, piece queue, hold, score and level.
 // Emits events for the UI and audio systems to react to.
+// ENHANCED: combo tracking, T-spin detection, bonus scoring.
 
 import { Board } from './board.js';
 import { BagRandomizer, createPiece, clonePiece, rotateMatrix, KICKS_JLSTZ, KICKS_I } from './pieces.js';
@@ -8,7 +9,8 @@ import {
   linesScore,
   levelForLines,
   softDropPoints,
-  hardDropPoints
+  hardDropPoints,
+  comboBonus
 } from './scoring.js';
 
 export class Player {
@@ -16,8 +18,8 @@ export class Player {
     this.name = config.name || 'PLAYER';
     this.id = config.id || 0;
     this.difficulty = config.difficulty || 'moderate';
-    this.remote = !!config.remote; // online opponent: no local input
-    this.bot = !!config.bot; // CPU-controlled opponent
+    this.remote = !!config.remote;
+    this.bot = !!config.bot;
     this.board = new Board();
     this.bag = new BagRandomizer();
     this.queue = [];
@@ -35,8 +37,20 @@ export class Player {
     this.finishOrder = -1;
     this.elapsed = 0;
     this.dropTimer = 0;
-    this.state = 'idle'; // idle | playing | paused | finished
+    this.state = 'idle';
     this._handlers = {};
+
+    // Combo system
+    this.combo = 0;
+    this.maxCombo = 0;
+    this.backToBack = false;
+    this.tSpins = 0;
+    this.lastRotationWasKick = false;
+    this.lastKickCorners = 0;
+    this.lastAction = null; // 'move', 'rotate', 'harddrop', 'softdrop'
+    this.lockMoves = 0;
+    this.lastDropDist = 0;
+
     this._fillQueue(2);
   }
 
@@ -76,6 +90,15 @@ export class Player {
     this.elapsed = 0;
     this.dropTimer = 0;
     this.state = 'idle';
+    this.combo = 0;
+    this.maxCombo = 0;
+    this.backToBack = false;
+    this.tSpins = 0;
+    this.lastRotationWasKick = false;
+    this.lastKickCorners = 0;
+    this.lastAction = null;
+    this.lockMoves = 0;
+    this.lastDropDist = 0;
     this._fillQueue(2);
   }
 
@@ -83,6 +106,9 @@ export class Player {
     this.piece = this.queue.shift();
     this._fillQueue(1);
     this.canHold = true;
+    this.lockMoves = 0;
+    this.lastRotationWasKick = false;
+    this.lastKickCorners = 0;
     if (!this.piece) return;
     if (this.board.collides(this.piece.matrix, this.piece.x, this.piece.y)) {
       this._topOut();
@@ -102,7 +128,6 @@ export class Player {
     return dropIntervalMs(this.difficulty, this.level);
   }
 
-  // Gravity step. Returns true if the piece locked this tick.
   tick(dt) {
     if (this.state !== 'playing' || !this.piece || this.board.isClearing()) return false;
     this.elapsed += dt;
@@ -137,6 +162,7 @@ export class Player {
     if (this.board.collides(this.piece.matrix, this.piece.x + dx, this.piece.y + dy)) return false;
     this.piece.x += dx;
     this.piece.y += dy;
+    this.lockMoves++;
     this._updateGhost();
     this.emit(evt);
     return true;
@@ -146,6 +172,7 @@ export class Player {
     if (this.state !== 'playing' || !this.piece) return false;
     const rotated = rotateMatrix(this.piece.matrix, dir);
     const kicks = this.piece.type === 'I' ? KICKS_I : KICKS_JLSTZ;
+    let kicked = false;
     for (const [kx, ky] of kicks) {
       const nx = this.piece.x + kx;
       const ny = this.piece.y + ky;
@@ -153,13 +180,41 @@ export class Player {
         this.piece.matrix = rotated;
         this.piece.x = nx;
         this.piece.y = ny;
+        this.lockMoves++;
         this._updateGhost();
+
+        // T-spin detection: if T-piece and used a kick
+        if (kx !== 0 || ky !== 0) {
+          this.lastRotationWasKick = true;
+          this.lastKickCorners = this._countTSpinCorners();
+        } else {
+          this.lastRotationWasKick = false;
+          this.lastKickCorners = 0;
+        }
+        this.lastAction = 'rotate';
         this.emit('rotate');
         return true;
       }
     }
     this.emit('blocked');
     return false;
+  }
+
+  // T-spin detection: count occupied corners of the T-piece bounding box
+  _countTSpinCorners() {
+    if (this.piece.type !== 'T' || !this.piece) return 0;
+    const corners = [
+      [this.piece.x, this.piece.y],
+      [this.piece.x + 2, this.piece.y],
+      [this.piece.x, this.piece.y + 2],
+      [this.piece.x + 2, this.piece.y + 2]
+    ];
+    let count = 0;
+    for (const [cx, cy] of corners) {
+      if (cx < 0 || cx >= 10 || cy >= 22) count++;
+      else if (cy >= 0 && this.board.grid[cy][cx]) count++;
+    }
+    return count;
   }
 
   softDrop(manual = true) {
@@ -169,6 +224,7 @@ export class Player {
       return false;
     }
     this.piece.y++;
+    this.lastDropDist++;
     if (manual) this.score += softDropPoints(1);
     this.dropTimer = 0;
     this._updateGhost();
@@ -183,7 +239,9 @@ export class Player {
       this.piece.y++;
       dist++;
     }
+    this.lastDropDist = dist;
     this.score += hardDropPoints(dist);
+    this.lastAction = 'harddrop';
     this.emit('harddrop', { dist });
     this._lock();
     return true;
@@ -203,6 +261,8 @@ export class Player {
       this._fillQueue(1);
     }
     this.canHold = false;
+    this.lastRotationWasKick = false;
+    this.lastKickCorners = 0;
     if (this.board.collides(this.piece.matrix, this.piece.x, this.piece.y)) {
       this._topOut();
       return true;
@@ -213,36 +273,85 @@ export class Player {
   }
 
   _lock() {
+    // T-spin detection before lock
+    const isTSpin = this.piece && this.piece.type === 'T' &&
+      this.lastRotationWasKick && this.lastKickCorners >= 3;
+
     const cleared = this.board.merge(this.piece);
     this.pieces++;
-    this.emit('lock', { lines: cleared.length });
+    this.lastAction = 'lock';
+    this.emit('lock', { lines: cleared.length, tSpin: isTSpin });
+
     if (this.board.gameOver) {
       this._topOut();
       return;
     }
+
     if (cleared.length) {
+      // Combo tracking
+      this.combo++;
+      if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+
+      // Back-to-back tracking (Tetris or T-spin)
+      const isSpecial = cleared.length === 4 || isTSpin;
+      if (isSpecial) {
+        this.backToBack = true;
+      } else {
+        this.backToBack = false;
+      }
+
       this.board.startClearing(cleared);
       this.emit('clearing', { rows: cleared });
       this.lines += cleared.length;
-      const gained = linesScore(cleared.length, this.level);
+
+      let gained = linesScore(cleared.length, this.level);
+
+      // T-spin bonus
+      if (isTSpin) {
+        const tSpinBonus = cleared.length === 0 ? 400 : cleared.length === 1 ? 800 : cleared.length === 2 ? 1200 : 1600;
+        gained += tSpinBonus * this.level;
+        this.tSpins++;
+        this.emit('tspin', { lines: cleared.length });
+      }
+
+      // Combo bonus
+      if (this.combo > 1) {
+        gained += comboBonus(this.combo, this.level);
+        this.emit('combo', { count: this.combo, gained: comboBonus(this.combo, this.level) });
+      }
+
+      // Back-to-back bonus
+      if (isSpecial && this.backToBack && cleared.length === 4) {
+        gained += 100 * this.level;
+        this.emit('backtoback');
+      }
+
       this.score += gained;
+
       if (cleared.length === 4) {
         this.tetrises++;
         this.emit('tetris');
       }
-      this.emit('clear', { count: cleared.length, gained, level: this.level });
+      this.emit('clear', { count: cleared.length, gained, level: this.level, tSpin: isTSpin, combo: this.combo });
+
       const newLevel = levelForLines(this.lines);
       if (newLevel > this.level) {
         this.level = newLevel;
         this.emit('levelup', { level: this.level });
       }
+    } else {
+      // No lines cleared resets combo
+      this.combo = 0;
     }
+
+    this.lastDropDist = 0;
+    this.lastRotationWasKick = false;
+    this.lastKickCorners = 0;
+    this.lockMoves = 0;
     this.piece = null;
-    // Spawn immediately unless rows are still flashing out.
     if (!this.board.isClearing()) this._spawn();
   }
 
-  // Called by the controller when the clear-flash animation completes.
   afterClear() {
     if (this.board.finishClearing()) {
       this.emit('rowsgone');

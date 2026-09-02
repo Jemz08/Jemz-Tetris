@@ -1,4 +1,5 @@
 // Classic Tetris scoring, difficulty gravity curves and level progression.
+// ENHANCED: combo bonus scoring.
 
 export const DIFFICULTIES = {
   easy: {
@@ -58,6 +59,12 @@ export function softDropPoints(cells) {
 
 export function hardDropPoints(cells) {
   return cells * 2;
+}
+
+// Combo bonus: 50 × combo_count × level
+export function comboBonus(combo, level) {
+  if (combo <= 1) return 0;
+  return 50 * combo * Math.max(1, level);
 }
 
 export function formatScore(n) {
