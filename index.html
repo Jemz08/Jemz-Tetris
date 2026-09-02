@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#0b0616">
   <title>Jemz Tetris — Retro Arcade Block Game</title>
-  <meta name="description" content="Jemz Tetris — a free retro arcade Tetris with solo and 2-4 player modes, four difficulties, high scores and mobile controls.">
+  <meta name="description" content="Jemz Tetris — a free retro arcade Tetris with solo, VS Bot and online 2P modes, four difficulties, high scores and mobile controls.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='11' height='11' fill='%2300f0ff'/%3E%3Crect x='17' y='4' width='11' height='11' fill='%23d142f5'/%3E%3Crect x='4' y='17' width='11' height='11' fill='%23ffd447'/%3E%3Crect x='17' y='17' width='11' height='11' fill='%2335e07a'/%3E%3C/svg%3E">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
@@ -38,7 +38,7 @@
 
         <nav class="menu-buttons" id="menu-buttons">
           <button class="btn btn-primary" type="button" data-action="play" data-players="1">PLAY SOLO</button>
-          <button class="btn btn-primary" type="button" data-action="multi">MULTIPLAYER</button>
+          <button class="btn btn-primary" type="button" data-action="vsbot">VS BOT</button>
           <button class="btn btn-primary" type="button" data-action="online">ONLINE 2P · ROOM CODE</button>
           <button class="btn" type="button" data-action="difficulty">DIFFICULTY</button>
           <button class="btn" type="button" data-action="scores">HIGH SCORES</button>
@@ -49,41 +49,34 @@
         <div class="menu-foot">
           <span class="diff-badge" id="menu-difficulty">MODERATE</span>
           <span class="menu-hint">SOUND: <b id="menu-sound">ON</b> · MUSIC: <b id="menu-music">ON</b></span>
-          <span class="menu-note">2–4P = LOCAL (same device) · ONLINE 2P = room code invite</span>
+          <span class="menu-note">VS BOT = one device, CPU opponent · ONLINE 2P = room code invite</span>
         </div>
       </div>
     </section>
 
-    <!-- ============================ MULTIPLAYER ============================ -->
-    <section id="screen-multi" class="screen">
+    <!-- ============================ VS BOT ============================ -->
+    <section id="screen-vsbot" class="screen">
       <div class="panel-wrap">
-        <h2 class="screen-title">MULTIPLAYER</h2>
-        <p class="multi-note">Two ways to play with friends — pick how:</p>
-
-        <div class="multi-grid">
-          <div class="multi-card">
-            <h3 class="multi-title local">LOCAL · ONE DEVICE</h3>
-            <p class="multi-desc">2–4 players share the same screen. Each player uses their own keys (shown below). On touch screens, tap the player tab above the pad to switch who the pad controls.</p>
-            <div class="multi-actions">
-              <button class="btn btn-primary" type="button" data-action="play" data-players="2">2P LOCAL</button>
-              <button class="btn btn-primary" type="button" data-action="play" data-players="3">3P LOCAL</button>
-              <button class="btn btn-primary" type="button" data-action="play" data-players="4">4P LOCAL</button>
-            </div>
-          </div>
-
-          <div class="multi-card">
-            <h3 class="multi-title online">ONLINE · TWO DEVICES</h3>
-            <p class="multi-desc">Race a friend on another phone or PC. One device creates a room and shares the CODE — the other joins with it. No account, no sign-up, free.</p>
-            <div class="multi-actions">
-              <button class="btn btn-primary" type="button" data-action="online">ONLINE 2P · ROOM CODE</button>
-            </div>
-          </div>
+        <h2 class="screen-title">VS BOT</h2>
+        <p class="multi-note">One device, one board each — beat the CPU before it beats you. The difficulty you pick sets both the bot's skill and the falling speed for you both.</p>
+        <div class="diff-grid">
+          <button class="vsbot-card" type="button" data-action="vsbot-start" data-difficulty="easy">
+            <span class="diff-name easy">EASY</span>
+            <span class="diff-desc">Slow bot · makes real mistakes · great for learning</span>
+          </button>
+          <button class="vsbot-card" type="button" data-action="vsbot-start" data-difficulty="moderate">
+            <span class="diff-name moderate">MODERATE</span>
+            <span class="diff-desc">Steady pace · a fair fight</span>
+          </button>
+          <button class="vsbot-card" type="button" data-action="vsbot-start" data-difficulty="hard">
+            <span class="diff-name hard">HARD</span>
+            <span class="diff-desc">Fast and sharp · rarely misplays</span>
+          </button>
+          <button class="vsbot-card" type="button" data-action="vsbot-start" data-difficulty="extreme">
+            <span class="diff-name extreme">EXTREME</span>
+            <span class="diff-desc">Near-perfect CPU · brutal speed</span>
+          </button>
         </div>
-
-        <h3 class="setting-subtitle">LOCAL PLAYER KEYS</h3>
-        <div id="multi-controls"></div>
-        <p class="multi-note dim">Every key shown here is remappable in SETTINGS → CONTROLS.</p>
-
         <button class="btn" type="button" data-action="menu">BACK</button>
       </div>
     </section>
@@ -209,11 +202,13 @@
 
           <h3 class="setting-subtitle">CONTROLS</h3>
           <div id="howto-controls"></div>
-          <p class="howto-text">HOLD stores a piece for later. The ghost outline shows where the piece will land. Multiplayer: the last player standing wins — beaten players are ranked by when they topped out, ties broken by score.</p>
+          <p class="howto-text">HOLD stores a piece for later. The ghost outline shows where the piece will land. Rotating near a wall, the floor, or the stack will nudge (kick) the piece sideways or up/down to make the turn fit, just like the original games — it isn't only a straight rotate-in-place.</p>
 
-          <h3 class="setting-subtitle">MULTIPLAYER</h3>
-          <p class="howto-text"><b>LOCAL (2–4 PLAYERS, ONE DEVICE):</b> From the main menu choose MULTIPLAYER → LOCAL, then pick 2, 3 or 4 players. Each player uses their own keys — see the LOCAL PLAYER KEYS table (every key is remappable in SETTINGS → CONTROLS). On a touch screen, tap the player tab above the touch pad to switch who the pad controls.</p>
-          <p class="howto-text"><b>ONLINE (2 PLAYERS, TWO DEVICES):</b> Choose ONLINE 2P · ROOM CODE. One device taps CREATE ROOM and shares the CODE (use the COPY CODE button); the other taps JOIN ROOM and types the code in. No account or sign-up needed — rooms connect directly via WebRTC. Both players race; the first to top out loses.</p>
+          <h3 class="setting-subtitle">VS BOT</h3>
+          <p class="howto-text">From the main menu choose VS BOT and pick a difficulty — EASY through EXTREME. That sets both the CPU's skill (how well it stacks and how often it slips up) and the falling speed for both of you. Race it on one device; whoever tops out first loses.</p>
+
+          <h3 class="setting-subtitle">ONLINE 2P</h3>
+          <p class="howto-text">Choose ONLINE 2P · ROOM CODE. One device taps CREATE ROOM and shares the CODE (use the COPY CODE button); the other taps JOIN ROOM and types the code in. No account or sign-up needed — rooms connect directly via WebRTC. Both players race; the first to top out loses.</p>
         </div>
         <button class="btn" type="button" data-action="menu">BACK</button>
       </div>
