@@ -3,40 +3,15 @@
 
 export const PIECE_TYPES = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
 
-export const PIECE_COLORS = {
-  I: {
-    base: '#00f0ff', light: '#80f8ff', dark: '#008899',
-    glow: 'rgba(0,240,255,0.5)', inner: 'rgba(0,240,255,0.15)', shine: 'rgba(200,255,255,0.7)'
-  },
-  O: {
-    base: '#ffd740', light: '#ffe880', dark: '#b39500',
-    glow: 'rgba(255,215,64,0.5)', inner: 'rgba(255,215,64,0.15)', shine: 'rgba(255,245,200,0.7)'
-  },
-  T: {
-    base: '#e040fb', light: '#f080ff', dark: '#9c27b0',
-    glow: 'rgba(224,64,251,0.5)', inner: 'rgba(224,64,251,0.15)', shine: 'rgba(255,200,255,0.7)'
-  },
-  S: {
-    base: '#00e676', light: '#69f0ae', dark: '#00a152',
-    glow: 'rgba(0,230,118,0.5)', inner: 'rgba(0,230,118,0.15)', shine: 'rgba(200,255,230,0.7)'
-  },
-  Z: {
-    base: '#ff1744', light: '#ff616f', dark: '#c4001d',
-    glow: 'rgba(255,23,68,0.5)', inner: 'rgba(255,23,68,0.15)', shine: 'rgba(255,200,210,0.7)'
-  },
-  J: {
-    base: '#448aff', light: '#82b1ff', dark: '#2962ff',
-    glow: 'rgba(68,138,255,0.5)', inner: 'rgba(68,138,255,0.15)', shine: 'rgba(200,220,255,0.7)'
-  },
-  L: {
-    base: '#ff9100', light: '#ffb74d', dark: '#c56200',
-    glow: 'rgba(255,145,0,0.5)', inner: 'rgba(255,145,0,0.15)', shine: 'rgba(255,230,200,0.7)'
-  }
+export const COLORS = {
+  I: '#06c7d9',
+  O: '#f8c30d',
+  T: '#ba36ee',
+  S: '#4bc607',
+  Z: '#e21f1e',
+  J: '#1459f6',
+  L: '#f07303'
 };
-
-// Backward-compatible flat color map
-export const COLORS = {};
-for (const [k, v] of Object.entries(PIECE_COLORS)) COLORS[k] = v.base;
 
 // Matrices are row-major. Pieces spawn at the top-middle of the board.
 const MATRICES = {
@@ -79,6 +54,11 @@ const MATRICES = {
 
 const SIZE = { I: 4, O: 2, T: 3, S: 3, Z: 3, J: 3, L: 3 };
 
+// Kick offsets tried in order after a rotation would otherwise collide —
+// this is what lets a piece "squeeze" sideways or bump up/down through a
+// gap instead of rotation just failing against a wall or the stack, the
+// way rotation works in the original/guideline Tetris games.
+// [dx, dy] — dy positive = down (matches this board's y-down coordinates).
 export const KICKS_JLSTZ = [
   [0, 0], [-1, 0], [1, 0], [0, -1], [0, 1],
   [-1, -1], [1, -1], [-1, 1], [1, 1],
@@ -104,12 +84,14 @@ export function rotateMatrix(matrix, dir) {
   const size = matrix.length;
   const out = matrix.map((row) => row.slice());
   if (dir > 0) {
+    // clockwise: transpose then reverse rows
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         out[x][size - 1 - y] = matrix[y][x];
       }
     }
   } else {
+    // counter-clockwise: transpose then reverse columns
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
         out[size - 1 - x][y] = matrix[y][x];

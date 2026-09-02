@@ -1,33 +1,11 @@
 // DOM helpers, canvas rendering, HUD, overlays, touch pad and high scores.
-// ENHANCED: 3D block rendering, particle system, screen shake, combo popups.
 
-import { PIECE_COLORS } from './pieces.js';
+import { COLORS } from './pieces.js';
 import { COLS, ROWS, HIDDEN } from './board.js';
 import { formatScore } from './scoring.js';
 import { loadScores, loadSettings } from './storage.js';
 import { fetchLeaderboard, subscribeLeaderboard, stopLiveLeaderboard, isOnlineLeaderboardConfigured } from './leaderboard.js';
 import { getTier } from './rank.js';
-
-// roundRect polyfill for older browsers
-if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
-  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, radii) {
-    let r = typeof radii === 'number' ? [radii, radii, radii, radii]
-      : Array.isArray(radii) ? radii.concat([0, 0, 0, 0]).slice(0, 4)
-      : [0, 0, 0, 0];
-    this.beginPath();
-    this.moveTo(x + r[0], y);
-    this.lineTo(x + w - r[1], y);
-    this.quadraticCurveTo(x + w, y, x + w, y + r[1]);
-    this.lineTo(x + w, y + h - r[2]);
-    this.quadraticCurveTo(x + w, y + h, x + w - r[2], y + h);
-    this.lineTo(x + r[3], y + h);
-    this.quadraticCurveTo(x, y + h, x, y + h - r[3]);
-    this.lineTo(x, y + r[0]);
-    this.quadraticCurveTo(x, y, x + r[0], y);
-    this.closePath();
-    return this;
-  };
-}
 
 export const $ = (id) => document.getElementById(id);
 
@@ -48,178 +26,7 @@ export function showScreen(name) {
   if (name !== 'scores') stopLiveLeaderboard();
 }
 
-// ---- particle system --------------------------------------------------
-
-class Particle {
-  constructor(x, y, vx, vy, color, life, size, type = 'circle') {
-    this.x = x;
-    this.y = y;
-    this.vx = vx;
-    this.vy = vy;
-    this.color = color;
-    this.life = life;
-    this.maxLife = life;
-    this.size = size;
-    this.type = type;
-    this.gravity = 0.08;
-    this.friction = 0.99;
-    this.alpha = 1;
-  }
-
-  update() {
-    this.x += this.vx;
-    this.y += this.vy;
-    this.vy += this.gravity;
-    this.vx *= this.friction;
-    this.life--;
-    this.alpha = Math.max(0, this.life / this.maxLife);
-  }
-
-  draw(ctx) {
-    if (this.alpha <= 0) return;
-    ctx.save();
-    ctx.globalAlpha = this.alpha;
-    if (this.type === 'spark') {
-      const len = this.size * 2;
-      const angle = Math.atan2(this.vy, this.vx);
-      ctx.strokeStyle = this.color;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(this.x - Math.cos(angle) * len, this.y - Math.sin(angle) * len);
-      ctx.lineTo(this.x + Math.cos(angle) * len * 0.3, this.y + Math.sin(angle) * len * 0.3);
-      ctx.stroke();
-    } else if (this.type === 'glow') {
-      const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size);
-      grad.addColorStop(0, this.color);
-      grad.addColorStop(1, 'transparent');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = this.color;
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.size * this.alpha, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-}
-
-class ParticleSystem {
-  constructor() {
-    this.particles = [];
-  }
-
-  emit(x, y, count, color, opts = {}) {
-    const {
-      speedMin = 0.5, speedMax = 3, lifeMin = 20, lifeMax = 50,
-      sizeMin = 1, sizeMax = 3, type = 'circle', gravity = 0.08
-    } = opts;
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = speedMin + Math.random() * (speedMax - speedMin);
-      const vx = Math.cos(angle) * speed;
-      const vy = Math.sin(angle) * speed;
-      const life = lifeMin + Math.random() * (lifeMax - lifeMin);
-      const size = sizeMin + Math.random() * (sizeMax - sizeMin);
-      const p = new Particle(x, y, vx, vy, color, life, size, type);
-      p.gravity = gravity;
-      this.particles.push(p);
-    }
-  }
-
-  emitLock(cellX, cellY, cellSize, color) {
-    const cx = cellX * cellSize + cellSize / 2;
-    const cy = cellY * cellSize + cellSize / 2;
-    const pColors = PIECE_COLORS[color] || { base: color, light: color };
-    // Sparks
-    this.emit(cx, cy, 6, pColors.light, { speedMin: 1, speedMax: 4, lifeMin: 10, lifeMax: 25, sizeMin: 1, sizeMax: 2, type: 'spark', gravity: 0.05 });
-    // Glow dots
-    this.emit(cx, cy, 4, pColors.glow, { speedMin: 0.3, speedMax: 1.5, lifeMin: 15, lifeMax: 30, sizeMin: 2, sizeMax: 5, type: 'glow', gravity: 0.02 });
-  }
-
-  emitClear(y, cellSize, row, isTetris) {
-    for (let x = 0; x < COLS; x++) {
-      const cx = x * cellSize + cellSize / 2;
-      const cy = y * cellSize + cellSize / 2;
-      const count = isTetris ? 8 : 4;
-      const color = isTetris ? '#ffd740' : '#00f0ff';
-      this.emit(cx, cy, count, color, { speedMin: 1, speedMax: 5, lifeMin: 15, lifeMax: 40, sizeMin: 1, sizeMax: 3, type: isTetris ? 'glow' : 'circle', gravity: 0.06 });
-    }
-  }
-
-  emitTetrisCelebration(cellSize) {
-    for (let i = 0; i < 60; i++) {
-      const cx = (Math.random() * COLS) * cellSize + cellSize / 2;
-      const cy = (Math.random() * ROWS) * cellSize * 0.3;
-      const colors = ['#ffd740', '#00f0ff', '#e040fb', '#00e676'];
-      const c = colors[Math.floor(Math.random() * colors.length)];
-      this.emit(cx, cy, 2, c, { speedMin: 2, speedMax: 6, lifeMin: 30, lifeMax: 70, sizeMin: 2, sizeMax: 5, type: 'glow', gravity: 0.04 });
-    }
-  }
-
-  emitHardDropTrail(startY, endY, cellX, cellSize, color) {
-    const pColors = PIECE_COLORS[color] || { base: color };
-    for (let y = startY; y <= endY; y += 2) {
-      const cy = y * cellSize + cellSize / 2;
-      const cx = cellX * cellSize + cellSize / 2;
-      this.emit(cx, cy, 1, pColors.glow, { speedMin: 0, speedMax: 0.5, lifeMin: 8, lifeMax: 15, sizeMin: 1, sizeMax: 3, type: 'glow', gravity: 0 });
-    }
-  }
-
-  update() {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      this.particles[i].update();
-      if (this.particles[i].life <= 0) this.particles.splice(i, 1);
-    }
-  }
-
-  draw(ctx) {
-    for (const p of this.particles) p.draw(ctx);
-  }
-
-  clear() {
-    this.particles = [];
-  }
-}
-
-// Export for use in main.js
-export const particles = new ParticleSystem();
-
-// ---- screen shake -----------------------------------------------------
-
-export function screenShake(boardWrap, intensity = 'normal') {
-  if (!boardWrap) return;
-  boardWrap.classList.remove('shake', 'shake-big');
-  void boardWrap.offsetWidth; // force reflow
-  boardWrap.classList.add(intensity === 'big' ? 'shake-big' : 'shake');
-}
-
-// ---- combo popup ------------------------------------------------------
-
-export function showComboPopup(boardWrap, text, type = '') {
-  if (!boardWrap) return;
-  const popup = document.createElement('div');
-  popup.className = `combo-popup ${type}`;
-  popup.textContent = text;
-  boardWrap.appendChild(popup);
-  setTimeout(() => popup.remove(), 1200);
-}
-
-export function showScoreFloat(boardWrap, text) {
-  if (!boardWrap) return;
-  const f = document.createElement('div');
-  f.className = 'score-float';
-  f.textContent = text;
-  f.style.left = '50%';
-  f.style.top = '30%';
-  f.style.transform = 'translateX(-50%)';
-  boardWrap.appendChild(f);
-  setTimeout(() => f.remove(), 1000);
-}
-
-// ---- canvas drawing ---------------------------------------------------
+// ---- canvas drawing ----------------------------------------------------
 
 let canvases = new Map(); // playerIdx -> {canvas, ctx, cell}
 
@@ -239,100 +46,47 @@ export function sizeCanvas(canvas) {
   return { ctx, cell };
 }
 
-// Enhanced 3D block drawing
-function drawCell(ctx, x, y, size, color, flash = 0, pieceType = null) {
-  const pad = Math.max(1, Math.round(size * 0.06));
+// Chunky pixel-bevel block: dark outline, thick light/shadow bands on two
+// opposite edges and a small bright glint near the top-left corner —
+// mirrors the look of the "TETROMINOES (PIXEL STYLE)" reference sprites.
+export function drawPixelBlock(ctx, x0, y0, size, color) {
+  const outline = Math.max(1, Math.round(size * 0.09));
+  ctx.fillStyle = 'rgba(4,3,10,0.9)';
+  ctx.fillRect(x0, y0, size, size);
+
+  const ix = x0 + outline;
+  const iy = y0 + outline;
+  const s = size - outline * 2;
+  if (s <= 0) return;
+
+  ctx.fillStyle = color;
+  ctx.fillRect(ix, iy, s, s);
+
+  const bevel = Math.max(1, Math.round(s * 0.24));
+  ctx.fillStyle = 'rgba(255,255,255,0.42)';
+  ctx.fillRect(ix, iy, s, bevel);
+  ctx.fillRect(ix, iy, bevel, s);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.38)';
+  ctx.fillRect(ix, iy + s - bevel, s, bevel);
+  ctx.fillRect(ix + s - bevel, iy, bevel, s);
+
+  const dot = Math.max(1, Math.round(s * 0.16));
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillRect(ix + bevel * 0.5, iy + bevel * 0.5, dot, dot);
+}
+
+function drawCell(ctx, x, y, size, color, flash = 0) {
+  const pad = Math.max(1, Math.round(size * 0.05));
   const x0 = x * size + pad;
   const y0 = y * size + pad;
   const s = size - pad * 2;
-  const r = Math.max(2, Math.round(s * 0.12)); // corner radius
-
   if (flash > 0) {
-    // Flash effect for clearing rows
-    const intensity = 0.55 + 0.45 * flash;
-    ctx.fillStyle = `rgba(255,255,255,${intensity})`;
-    ctx.beginPath();
-    ctx.roundRect(x0, y0, s, s, r);
-    ctx.fill();
+    ctx.fillStyle = `rgba(255,255,255,${0.55 + 0.45 * flash})`;
+    ctx.fillRect(x0, y0, s, s);
     return;
   }
-
-  // Get rich colors
-  const colors = pieceType && PIECE_COLORS[pieceType] ? PIECE_COLORS[pieceType] : null;
-  const baseColor = typeof color === 'string' ? color : '#888';
-  const lightColor = colors ? colors.light : '#ffffff';
-  const darkColor = colors ? colors.dark : '#333333';
-  const glowColor = colors ? colors.glow : 'rgba(128,128,128,0.3)';
-  const shineColor = colors ? colors.shine : 'rgba(255,255,255,0.5)';
-
-  // Outer glow
-  ctx.save();
-  ctx.shadowColor = glowColor;
-  ctx.shadowBlur = Math.max(2, s * 0.15);
-  ctx.fillStyle = baseColor;
-  ctx.beginPath();
-  ctx.roundRect(x0, y0, s, s, r);
-  ctx.fill();
-  ctx.restore();
-
-  // Main body gradient (3D effect)
-  const bodyGrad = ctx.createLinearGradient(x0, y0, x0 + s, y0 + s);
-  bodyGrad.addColorStop(0, lightColor);
-  bodyGrad.addColorStop(0.3, baseColor);
-  bodyGrad.addColorStop(0.7, baseColor);
-  bodyGrad.addColorStop(1, darkColor);
-  ctx.fillStyle = bodyGrad;
-  ctx.beginPath();
-  ctx.roundRect(x0, y0, s, s, r);
-  ctx.fill();
-
-  // Top-left highlight bevel
-  const bevelSize = Math.max(2, s * 0.18);
-  ctx.fillStyle = shineColor;
-  ctx.beginPath();
-  ctx.moveTo(x0 + r, y0);
-  ctx.lineTo(x0 + bevelSize, y0);
-  ctx.lineTo(x0, y0 + bevelSize);
-  ctx.lineTo(x0, y0 + r);
-  ctx.arcTo(x0, y0, x0 + r, y0, r);
-  ctx.fill();
-
-  // Inner highlight (fresnel-like)
-  const innerGrad = ctx.createLinearGradient(x0, y0, x0, y0 + s * 0.5);
-  innerGrad.addColorStop(0, 'rgba(255,255,255,0.25)');
-  innerGrad.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = innerGrad;
-  ctx.beginPath();
-  ctx.roundRect(x0 + 1, y0 + 1, s - 2, s * 0.45, [r, r, 0, 0]);
-  ctx.fill();
-
-  // Bottom-right shadow bevel
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.beginPath();
-  ctx.moveTo(x0 + s - r, y0 + s);
-  ctx.lineTo(x0 + s - bevelSize, y0 + s);
-  ctx.lineTo(x0 + s, y0 + s - bevelSize);
-  ctx.lineTo(x0 + s, y0 + s - r);
-  ctx.arcTo(x0 + s, y0 + s, x0 + s - r, y0 + s, r);
-  ctx.fill();
-
-  // Tiny specular highlight
-  const specX = x0 + s * 0.22;
-  const specY = y0 + s * 0.22;
-  const specR = Math.max(1, s * 0.08);
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.beginPath();
-  ctx.arc(specX, specY, specR, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-// Resolve piece type from a color value
-function resolvePieceType(colorVal) {
-  if (typeof colorVal !== 'string') return null;
-  for (const [type, c] of Object.entries(PIECE_COLORS)) {
-    if (c.base === colorVal) return type;
-  }
-  return null;
+  drawPixelBlock(ctx, x0, y0, s, color);
 }
 
 export function renderPlayer(player, canvas, opts = {}) {
@@ -345,17 +99,12 @@ export function renderPlayer(player, canvas, opts = {}) {
   const w = cell * COLS;
   const h = cell * ROWS;
 
-  // background with subtle gradient
+  // background
   ctx.clearRect(0, 0, w, h);
-  const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
-  bgGrad.addColorStop(0, 'rgba(6,3,18,0.95)');
-  bgGrad.addColorStop(0.5, 'rgba(4,2,12,0.95)');
-  bgGrad.addColorStop(1, 'rgba(6,3,18,0.95)');
-  ctx.fillStyle = bgGrad;
+  ctx.fillStyle = 'rgba(4,2,12,0.92)';
   ctx.fillRect(0, 0, w, h);
-
-  // grid with subtle glow
-  ctx.strokeStyle = 'rgba(100,80,170,0.08)';
+  // grid
+  ctx.strokeStyle = 'rgba(120,100,180,0.10)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   for (let x = 1; x < COLS; x++) {
@@ -369,53 +118,35 @@ export function renderPlayer(player, canvas, opts = {}) {
   ctx.stroke();
 
   const board = player.board;
-
-  // locked cells with 3D rendering
+  // locked cells
   for (let y = HIDDEN; y < ROWS + HIDDEN; y++) {
     for (let x = 0; x < COLS; x++) {
       const v = board.grid[y][x];
       if (!v) continue;
       const flashing = board.isRowFlashing(y);
       const flash = flashing ? Math.max(0, board.flash / 180) : 0;
-      const colorStr = typeof v === 'string' ? v : '#888';
-      const type = resolvePieceType(colorStr);
-      drawCell(ctx, x, y - HIDDEN, cell, colorStr, flash, type);
+      drawCell(ctx, x, y - HIDDEN, cell, typeof v === 'string' ? v : COLORS[v], flash);
     }
   }
 
-  // ghost piece with glow outline
+  // ghost
   if (player.piece && !player.topOut && player.state !== 'finished' && !board.isClearing()) {
+    const ghostColor = 'rgba(200,190,255,0.28)';
     const m = player.piece.matrix;
-    const ghostColor = PIECE_COLORS[player.piece.type]
-      ? PIECE_COLORS[player.piece.type].glow
-      : 'rgba(200,190,255,0.28)';
     for (let r = 0; r < m.length; r++) {
       for (let c = 0; c < m[r].length; c++) {
         if (!m[r][c]) continue;
         const px = player.piece.x + c;
         const py = player.ghostY + r;
         if (py < HIDDEN || py >= ROWS + HIDDEN) continue;
-        const bx = px * cell + 1.5;
-        const by = (py - HIDDEN) * cell + 1.5;
-        const bs = cell - 3;
-        // Ghost fill
-        ctx.fillStyle = ghostColor;
-        ctx.globalAlpha = 0.12;
-        ctx.beginPath();
-        ctx.roundRect(bx, by, bs, bs, 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        // Ghost outline
         ctx.strokeStyle = ghostColor;
         ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(bx, by, bs, bs, 2);
-        ctx.stroke();
+        ctx.strokeRect(px * cell + 1.5, (py - HIDDEN) * cell + 1.5, cell - 3, cell - 3);
       }
     }
   }
 
-  // active piece with full 3D rendering
+  // active piece
   if (player.piece && !player.topOut && player.state !== 'finished' && !board.isClearing()) {
     const m = player.piece.matrix;
     for (let r = 0; r < m.length; r++) {
@@ -424,261 +155,307 @@ export function renderPlayer(player, canvas, opts = {}) {
         const px = player.piece.x + c;
         const py = player.piece.y + r;
         if (py < HIDDEN || py >= ROWS + HIDDEN) continue;
-        drawCell(ctx, px, py - HIDDEN, cell, player.piece.color, 0, player.piece.type);
+        drawCell(ctx, px, py - HIDDEN, cell, player.piece.color);
       }
     }
   }
 
   // top-out red haze
   if (player.topOut) {
-    const topGrad = ctx.createLinearGradient(0, 0, 0, h);
-    topGrad.addColorStop(0, 'rgba(255,20,60,0.28)');
-    topGrad.addColorStop(0.5, 'rgba(255,20,60,0.12)');
-    topGrad.addColorStop(1, 'rgba(255,20,60,0.28)');
-    ctx.fillStyle = topGrad;
+    ctx.fillStyle = 'rgba(255,40,80,0.22)';
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = '#ff1744';
+    ctx.fillStyle = '#ff2d55';
     ctx.font = `bold ${Math.round(cell * 1.5)}px 'Press Start 2P', monospace`;
     ctx.textAlign = 'center';
-    ctx.shadowColor = 'rgba(255,23,68,0.8)';
-    ctx.shadowBlur = 16;
-    ctx.fillText('GAME', w / 2, h / 2 - cell * 0.8);
-    ctx.fillText('OVER', w / 2, h / 2 + cell * 0.8);
-    ctx.shadowBlur = 0;
+    ctx.fillText('GAME', w / 2, h / 2 - cell);
+    ctx.fillText('OVER', w / 2, h / 2 + cell * 0.6);
   }
 
-  // Draw particles on top
-  particles.update();
-  particles.draw(ctx);
+  // online opponent / CPU opponent name tag
+  if ((player.remote || player.bot) && !player.finished) {
+    ctx.fillStyle = 'rgba(154,143,192,0.9)';
+    ctx.font = `${Math.round(cell * 0.9)}px 'Press Start 2P', monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(player.remote ? 'RIVAL' : 'BOT', w / 2, cell * 1.2);
+  }
+
+  if (opts.callback) opts.callback();
 }
 
-// ---- next / hold preview canvas ---------------------------------------
-
-const previewCanvases = new Map();
-const PREVIEW_MATRICES = {
-  I: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
-  O: [[1,1],[1,1]],
-  T: [[0,1,0],[1,1,1],[0,0,0]],
-  S: [[0,1,1],[1,1,0],[0,0,0]],
-  Z: [[1,1,0],[0,1,1],[0,0,0]],
-  J: [[1,0,0],[1,1,1],[0,0,0]],
-  L: [[0,0,1],[1,1,1],[0,0,0]]
-};
-
-export function renderPreview(canvas, pieceType) {
-  if (!canvas || !pieceType) return;
-  let entry = previewCanvases.get(canvas);
-  if (!entry || entry.cell === 0) {
-    const rect = canvas.getBoundingClientRect();
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const cell = Math.max(6, Math.floor(rect.width / 5));
-    const px = cell * 5;
-    canvas.width = px * dpr;
-    canvas.height = px * dpr;
-    canvas.style.width = px + 'px';
-    canvas.style.height = px + 'px';
-    const ctx = canvas.getContext('2d');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    entry = { ctx, cell };
-    previewCanvases.set(canvas, entry);
-  }
-  const { ctx, cell } = entry;
-  const size = cell * 5;
+export function drawMiniPiece(canvas, type, dim = true) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const rect = canvas.getBoundingClientRect();
+  const size = Math.max(10, Math.floor(rect.width));
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size, size);
-  const colors = PIECE_COLORS[pieceType];
-  const m = PREVIEW_MATRICES[pieceType];
-  if (!m) return;
-  let minC = 5, maxC = 0, minR = 5, maxR = 0;
-  for (let r = 0; r < m.length; r++) {
-    for (let c = 0; c < m[r].length; c++) {
-      if (m[r][c]) { minC = Math.min(minC, c); maxC = Math.max(maxC, c); minR = Math.min(minR, r); maxR = Math.max(maxR, r); }
+  if (!type) return;
+  const cell = Math.floor((size - 6) / 4);
+  const cells = {
+    I: [[1, 0], [1, 1], [1, 2], [1, 3]],
+    O: [[0, 0], [0, 1], [1, 0], [1, 1]],
+    T: [[0, 1], [1, 0], [1, 1], [1, 2]],
+    S: [[0, 1], [0, 2], [1, 0], [1, 1]],
+    Z: [[0, 0], [0, 1], [1, 1], [1, 2]],
+    J: [[0, 0], [1, 0], [1, 1], [1, 2]],
+    L: [[0, 2], [1, 0], [1, 1], [1, 2]]
+  };
+  const ox = (size - cell * 4) / 2;
+  const oy = (size - cell * 4) / 2;
+  for (const [r, c] of cells[type]) {
+    if (dim) {
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillRect(ox + c * cell, oy + r * cell, cell - 1, cell - 1);
+    } else {
+      drawPixelBlock(ctx, ox + c * cell, oy + r * cell, cell - 1, COLORS[type]);
     }
   }
-  const ox = (size - (maxC - minC + 1) * cell) / 2 - minC * cell;
-  const oy = (size - (maxR - minR + 1) * cell) / 2 - minR * cell;
-  for (let r = 0; r < m.length; r++) {
-    for (let c = 0; c < m[r].length; c++) {
-      if (!m[r][c]) continue;
-      drawCell(ctx, (ox + c * cell) / cell, (oy + r * cell) / cell, cell, colors ? colors.base : '#888', 0, pieceType);
-    }
-  }
-}
-
-export function renderSidePanel(controller) {
-  if (!controller || !controller.players[0]) return;
-  const p = controller.players[0];
-  // Hold piece
-  const holdCanvas = $('hold-canvas');
-  if (holdCanvas && p.hold) renderPreview(holdCanvas, p.hold.type);
-  else if (holdCanvas) { const ctx = holdCanvas.getContext('2d'); ctx.clearRect(0, 0, holdCanvas.width, holdCanvas.height); }
-  // Next piece
-  const nextCanvas = $('next-canvas');
-  if (nextCanvas && p.queue[0]) renderPreview(nextCanvas, p.queue[0].type);
-  else if (nextCanvas) { const ctx = nextCanvas.getContext('2d'); ctx.clearRect(0, 0, nextCanvas.width, nextCanvas.height); }
-}
-
-// ---- HUD --------------------------------------------------------------
-
-export function buildArena(playerCount, parentEl) {
-  parentEl.innerHTML = '';
-  const arena = el('div', 'arena');
-  for (let i = 0; i < playerCount; i++) {
-    const zone = el('div', 'pzone');
-    zone.id = `pzone-${i}`;
-    const head = el('div', `pzone-head p${i + 1}`, `PLAYER ${i + 1}`);
-    zone.appendChild(head);
-
-    const wrap = el('div', `board-wrap p${i + 1}`);
-    wrap.id = `board-wrap-${i}`;
-    const canvas = el('canvas');
-    canvas.id = `board-canvas-${i}`;
-    wrap.appendChild(canvas);
-    zone.appendChild(wrap);
-
-    const stats = el('div', 'pzone-stats');
-    stats.innerHTML = `
-      <div class="stat"><span class="stat-label">SCORE</span><span class="stat-value score-val" id="score-${i}">000000</span></div>
-      <div class="stat"><span class="stat-label">LINES</span><span class="stat-value lines-val" id="lines-${i}">0</span></div>
-      <div class="stat"><span class="stat-label">LEVEL</span><span class="stat-value level-val" id="level-${i}">1</span></div>
-    `;
-    zone.appendChild(stats);
-    arena.appendChild(zone);
-  }
-  parentEl.appendChild(arena);
-  return arena;
-}
-
-export function updateArenaHud(controller) {
-  for (let i = 0; i < controller.players.length; i++) {
-    const p = controller.players[i];
-    const scoreEl = $(`score-${i}`);
-    const linesEl = $(`lines-${i}`);
-    const levelEl = $(`level-${i}`);
-    if (scoreEl) {
-      const newScore = formatScore(p.score);
-      if (scoreEl.textContent !== newScore) {
-        scoreEl.textContent = newScore;
-        scoreEl.classList.add('pop');
-        setTimeout(() => scoreEl.classList.remove('pop'), 120);
-      }
-    }
-    if (linesEl) linesEl.textContent = p.lines;
-    if (levelEl) levelEl.textContent = p.level;
-  }
-}
-
-export function setTopBar(mode, difficultyLabel) {
-  const bar = $("game-topbar");
-  if (!bar) return;
-  bar.innerHTML = `<div class="topbar-left"><span style="font-family:var(--font-pixel);font-size:10px;color:var(--cyan);letter-spacing:1px">${mode === "solo" ? "SOLO" : "MULTIPLAYER"}</span><span class="diff-badge" style="font-size:8px">${difficultyLabel || ""}</span></div><div class="topbar-right"><button class="topbar-btn" type="button" data-action="pause">PAUSE</button></div>`;
 }
 
 export function resetCanvasSizes() {
   canvases.clear();
 }
 
-// ---- overlays ---------------------------------------------------------
+// ---- arena construction -------------------------------------------------
 
-export function showOverlay(id) {
-  const ov = $(id);
+export function buildArena(controller, mode) {
+  const arena = $('arena');
+  arena.innerHTML = '';
+  arena.className = `arena mode-${mode}`;
+  const playerCount = controller.players.length;
+
+  controller.players.forEach((p, i) => {
+    const zone = el('div', 'pzone');
+    zone.dataset.p = i;
+
+    const header = el('div', 'pzone-head');
+    const name = el('span', 'pzone-name', p.name);
+    const status = el('span', 'pzone-status', '');
+    header.append(name, status);
+
+    const boardWrap = el('div', 'board-wrap');
+    const canvas = el('canvas', 'board-canvas');
+    canvas.setAttribute('aria-label', `${p.name} Tetris board`);
+    boardWrap.appendChild(canvas);
+
+    const stats = el('div', 'pzone-stats');
+    const stat = (label, val, id) => {
+      const s = el('div', 'stat');
+      s.appendChild(el('span', 'stat-label', label));
+      const v = el('span', 'stat-value', val);
+      v.id = `stat-${id}-${i}`;
+      s.appendChild(v);
+      stats.appendChild(s);
+      return v;
+    };
+    const scoreEl = stat('SCORE', '000000', 'score');
+    const linesEl = stat('LINES', '0', 'lines');
+    const levelEl = stat('LEVEL', '1', 'level');
+    const piecesEl = stat('PIECES', '0', 'pieces');
+    zone.append(header, boardWrap, stats);
+
+    // solo side panel with hold / next
+    if (playerCount === 1) {
+      const side = el('div', 'side-panel');
+      const panel = (title, canvasId) => {
+        const box = el('div', 'mini-panel');
+        box.appendChild(el('div', 'mini-title', title));
+        const cv = el('canvas', 'mini-canvas');
+        cv.id = canvasId;
+        box.appendChild(cv);
+        return box;
+      };
+      side.appendChild(panel('HOLD', 'mini-hold'));
+      side.appendChild(panel('NEXT', 'mini-next'));
+      const hs = el('div', 'mini-panel high-panel');
+      hs.appendChild(el('div', 'mini-title', 'HIGH SCORE'));
+      const hv = el('div', 'high-value');
+      hv.id = 'high-score-value';
+      hs.appendChild(hv);
+      side.appendChild(hs);
+      arena.appendChild(side);
+    }
+
+    arena.appendChild(zone);
+    sizeCanvas(canvas);
+  });
+
+  // solo: prefill high score
+  if (playerCount === 1) {
+    const hs = loadScores();
+    const best = hs.length ? Math.max(...hs.map((s) => s.score)) : 0;
+    const hv = $('high-score-value');
+    if (hv) hv.textContent = formatScore(best);
+  }
+
+  return arena;
+}
+
+export function updateArenaHud(controller) {
+  controller.players.forEach((p, i) => {
+    const set = (id, val) => {
+      const node = $(`${id}-${i}`);
+      if (node) node.textContent = val;
+    };
+    set('stat-score', formatScore(p.score));
+    set('stat-lines', String(p.lines));
+    set('stat-level', String(p.level));
+    set('stat-pieces', String(p.pieces));
+
+    const status = document.querySelector(`.pzone[data-p="${i}"] .pzone-status`);
+    if (status) {
+      if (p.topOut) status.textContent = 'GAME OVER';
+      else if (p.finished) status.textContent = `#${p.finishOrder}`;
+      else if (p.state === 'paused') status.textContent = 'PAUSED';
+      else status.textContent = p.remote ? 'ONLINE' : (p.bot ? 'CPU' : '');
+    }
+
+    const canvas = document.querySelector(`.pzone[data-p="${i}"] .board-canvas`);
+    if (canvas) renderPlayer(p, canvas);
+
+    if (i === 0) {
+      const hold = $('mini-hold');
+      const next = $('mini-next');
+      if (hold) drawMiniPiece(hold, p.hold ? p.hold.type : null, !p.canHold);
+      if (next) drawMiniPiece(next, p.queue.length ? p.queue[0].type : null, false);
+    }
+  });
+}
+
+export function setTopBar(mode, difficultyLabel) {
+  const bar = $('game-topbar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  const left = el('span', 'topbar-item', mode === 'solo' ? 'SOLO' : (mode === 'bot' ? 'VS BOT' : `${mode} PLAYERS`));
+  const mid = el('span', 'topbar-item topbar-diff', difficultyLabel);
+  const btn = el('button', 'btn btn-small', 'PAUSE');
+  btn.type = 'button';
+  btn.dataset.action = 'pause';
+  bar.append(left, mid, btn);
+}
+
+// ---- overlays ------------------------------------------------------------
+
+export function showOverlay(name) {
+  const ov = $(`overlay-${name}`);
   if (ov) ov.classList.add('open');
 }
 
-export function hideOverlay(id) {
-  const ov = $(id);
+export function hideOverlay(name) {
+  const ov = $(`overlay-${name}`);
   if (ov) ov.classList.remove('open');
 }
 
-export function showCountdown(num, cb) {
+export function showCountdown(onDone) {
   const ov = $('overlay-countdown');
-  const numEl = $('countdown-num');
-  if (!ov || !numEl) { if (cb) cb(); return; }
+  const num = $('countdown-num');
   ov.classList.add('open');
-  let n = num;
-  numEl.textContent = n;
-  numEl.classList.remove('go');
+  let n = 3;
+  num.textContent = '3';
+  audioRefs && audioRefs.countdown && audioRefs.countdown();
   const iv = setInterval(() => {
     n--;
-    if (n > 0) {
-      numEl.textContent = n;
-    } else if (n === 0) {
-      numEl.textContent = 'GO!';
-      numEl.classList.add('go');
-    } else {
+    if (n === 0) {
+      num.textContent = 'GO!';
+      num.classList.add('go');
+      audioRefs && audioRefs.go && audioRefs.go();
+    } else if (n > 0) {
+      num.textContent = String(n);
+      num.classList.remove('go');
+      audioRefs && audioRefs.countdown && audioRefs.countdown();
+    }
+    if (n < 0) {
       clearInterval(iv);
       ov.classList.remove('open');
-      if (cb) cb();
+      onDone();
     }
   }, 700);
 }
 
-export function showGameOver(score, lines, level, isNew, cb) {
-  $('gameover-score').textContent = formatScore(score);
-  $('gameover-lines').textContent = lines;
-  $('gameover-level').textContent = level;
-  const bestEl = $('gameover-newbest');
-  if (isNew) {
-    bestEl.classList.add('show');
-  } else {
-    bestEl.classList.remove('show');
-  }
+let audioRefs = null;
+export function setAudioRefs(refs) {
+  audioRefs = refs;
+}
+
+export function showGameOver(data) {
+  const ov = $('overlay-gameover');
+  $('gameover-score').textContent = formatScore(data.score);
+  $('gameover-lines').textContent = String(data.lines);
+  $('gameover-level').textContent = String(data.level);
+  const qualifies = data.qualifies;
   const nameRow = $('gameover-name-row');
-  if (isNew && nameRow) {
+  if (qualifies) {
     nameRow.classList.remove('hidden');
-    $('gameover-name').value = '';
-    $('gameover-name').focus();
-  } else if (nameRow) {
+    const nameInput = $('gameover-name');
+    const settings = loadSettings();
+    nameInput.value = settings.playerName || 'PLAYER';
+    nameInput.focus();
+  } else {
     nameRow.classList.add('hidden');
   }
-  showOverlay('overlay-gameover');
+  ov.classList.add('open');
 }
 
-export function showVictory(ranked) {
+export function hideGameOver() {
+  hideOverlay('gameover');
+}
+
+export function showVictory(ranked, mode) {
+  const ov = $('overlay-victory');
   const list = $('victory-list');
   list.innerHTML = '';
+  const winner = ranked[0];
+  $('victory-title').textContent = mode === 'solo' ? 'GAME OVER' : `${winner.name} WINS!`;
   ranked.forEach((p, i) => {
     const row = el('div', `vrow ${i === 0 ? 'winner' : ''}`);
-    row.innerHTML = `
-      <span class="vrank">#${i + 1}</span>
-      <span class="vname">${p.name}</span>
-      <span class="vscore">${formatScore(p.score)}</span>
-      <span class="vlines">${p.lines} L</span>
-    `;
+    row.appendChild(el('span', 'vrank', `#${i + 1}`));
+    row.appendChild(el('span', 'vname', p.name));
+    row.appendChild(el('span', 'vscore', formatScore(p.score)));
+    row.appendChild(el('span', 'vlines', String(p.lines)));
     list.appendChild(row);
   });
-  $('victory-title').textContent = ranked[0] ? `${ranked[0].name} WINS!` : 'WINNER!';
-  showOverlay('overlay-victory');
+  ov.classList.add('open');
 }
 
-export function showToast(text) {
-  const t = $('toast');
-  if (!t) return;
-  t.textContent = text;
-  t.classList.add('open');
-  clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove('open'), 2200);
+// ---- toasts ---------------------------------------------------------------
+
+export function showToast(msg, ms = 2600) {
+  const toast = $('toast');
+  toast.textContent = msg;
+  toast.classList.add('open');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toast.classList.remove('open'), ms);
 }
 
-// ---- scores screen ----------------------------------------------------
+// ---- high scores ----------------------------------------------------------
 
-function renderScoreRows(scores) {
+function renderScoreRows(list) {
   const tbody = $('scores-body');
-  if (!tbody) return;
   tbody.innerHTML = '';
-  if (!scores.length) {
+  if (!list.length) {
     const row = el('tr');
-    row.appendChild(Object.assign(el('td'), { colSpan: 4, textContent: 'NO SCORES YET' }));
+    const cell = el('td', '', 'NO SCORES YET — BE THE FIRST!');
+    cell.colSpan = 6;
+    row.appendChild(cell);
     tbody.appendChild(row);
     return;
   }
-  scores.slice(0, 10).forEach((s, i) => {
+  list.slice(0, 20).forEach((s, i) => {
     const row = el('tr');
-    row.innerHTML = `
-      <td>${i + 1}</td>
-      <td>${(s.name || 'PLAYER').toUpperCase()}</td>
-      <td>${formatScore(s.score || 0)}</td>
-      <td>${s.lines || 0}</td>
-    `;
+    row.appendChild(el('td', '', String(i + 1)));
+    row.appendChild(el('td', '', s.name));
+    const tier = getTier(s.score || 0);
+    const tierCell = el('td');
+    const badge = el('span', 'rank-badge', tier.name);
+    badge.style.color = tier.color;
+    badge.style.borderColor = tier.color;
+    tierCell.appendChild(badge);
+    row.appendChild(tierCell);
+    row.appendChild(el('td', 'num', formatScore(s.score)));
+    row.appendChild(el('td', 'num', String(s.lines)));
+    row.appendChild(el('td', '', (s.difficulty || 'moderate').toUpperCase()));
     tbody.appendChild(row);
   });
 }
@@ -691,6 +468,7 @@ function setScoresStatus(text, live) {
 }
 
 export function renderScores(filter) {
+  // Show local scores immediately so the screen never looks empty/frozen.
   const local = filter ? loadScores().filter((s) => s.difficulty === filter) : loadScores();
   renderScoreRows(local);
 
@@ -709,6 +487,7 @@ export function renderScores(filter) {
     }
   });
 
+  // Keep it fresh while the player is sitting on this screen.
   subscribeLeaderboard(filter, (shared) => {
     renderScoreRows(shared);
     setScoresStatus('SHARED LEADERBOARD • LIVE', true);
@@ -828,8 +607,3 @@ export let touchTarget = 0;
 export function setTouchTarget(i) {
   touchTarget = i;
 }
-
-export function setAudioRefs(a) {
-  audioRefs = a;
-}
-let audioRefs = null;

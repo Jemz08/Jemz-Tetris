@@ -1,10 +1,8 @@
 // JEMZ TETRIS — app entry: screens, input, game lifecycle, online, persistence.
-// ENHANCED: particles, screen shake, combo popups, visual effects.
 
 import { GameController } from './multiplayer.js';
 import { audio } from './audio.js';
 import { Online2P } from './online.js';
-import { PIECE_COLORS } from './pieces.js';
 import {
   loadSettings, saveSettings, loadScores, submitScore, scoreQualifies,
   loadStats, saveStats, clearAllData
@@ -13,11 +11,10 @@ import { submitToLeaderboard } from './leaderboard.js';
 import { onAuthChange, signUpEmail, signInEmail, signInGoogle, signOutUser, getCurrentUser } from './auth.js';
 import { DIFFICULTIES } from './scoring.js';
 import {
-  $, showScreen, updateArenaHud, setTopBar, showOverlay, hideOverlay,
+  $, showScreen, buildArena, updateArenaHud, setTopBar, showOverlay, hideOverlay,
   showCountdown, showGameOver, showVictory, showToast, renderScores,
   buildControlsTable, prettyKey, updateTouchpad, touchTarget, setAudioRefs,
-  resetCanvasSizes, renderAccountUI, setAccountStatus,
-  particles, screenShake, showComboPopup, showScoreFloat
+  resetCanvasSizes, renderAccountUI, setAccountStatus
 } from './ui.js';
 
 // ---------------------------------------------------------------- state
@@ -44,6 +41,10 @@ setAudioRefs(audio);
 
 // ---------------------------------------------------------------- board fit
 
+// Measures the real space left for the board(s) after the topbar, touchpad,
+// and (for solo) the hold/next/high-score panel, then sets an exact pixel
+// max-width on each .pzone so the board always fills the actual screen
+// instead of being capped by a guessed static size.
 function fitBoard() {
   const screenGame = $('screen-game');
   if (!screenGame || !screenGame.classList.contains('active')) return;
@@ -64,6 +65,8 @@ function fitBoard() {
     + (touchpadVisible ? touchpad.offsetHeight : 0)
     + gap * (touchpadVisible ? 2 : 1);
 
+  // Use the real viewport height (not the container's own box, which can
+  // be inflated by its own not-yet-resized content) as the source of truth.
   const viewportH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
   const availH = Math.max(120, viewportH - reserved);
 
@@ -72,12 +75,14 @@ function fitBoard() {
   const sideExtraH = sidePanel && sideStacked ? sidePanel.offsetHeight + 10 : 0;
   const sideExtraW = sidePanel && !sideStacked ? sidePanel.offsetWidth + 14 : 0;
 
+  // Each pzone also has its own header label and stats row stacked above/
+  // below the board itself — subtract those or the board gets sized too tall.
   const firstZone = zones[0];
   const zoneHead = firstZone.querySelector('.pzone-head');
   const zoneStats = firstZone.querySelector('.pzone-stats');
   const zoneChrome = (zoneHead ? zoneHead.offsetHeight : 0)
     + (zoneStats ? zoneStats.offsetHeight : 0)
-    + 14;
+    + 14; // pzone's own internal gaps
 
   const boardAvailH = Math.max(100, availH - sideExtraH - zoneChrome);
   const arenaW = arena.clientWidth - sideExtraW;
@@ -85,11 +90,16 @@ function fitBoard() {
   const gapTotal = 14 * Math.max(0, cols - 1);
   const perBoardW = Math.max(60, (arenaW - gapTotal) / cols);
 
+  // Board grid is 10 wide x 20 tall, so height = 2 x width.
   const widthFromHeight = boardAvailH / 2;
   const boardW = Math.floor(Math.min(perBoardW, widthFromHeight));
 
   zones.forEach((z) => { z.style.maxWidth = `${boardW}px`; });
 
+  // When the side panel sits beside the board (column layout, not stacked
+  // above it), cap its height to match the board's total height so it can
+  // never make the arena taller than the board itself; let it scroll
+  // internally in the rare case it doesn't all fit.
   if (sidePanel) {
     if (!sideStacked) {
       const zoneTotalH = zoneChrome + boardW * 2;
@@ -105,71 +115,7 @@ function fitBoard() {
   if (controller) updateArenaHud(controller);
 }
 
-// ---------------------------------------------------------------- arena builder (DOM)
-
-function buildArenaDOM(playerCount, mode) {
-  const parentEl = $('arena');
-  parentEl.innerHTML = '';
-  const arena = document.createElement('div');
-  arena.className = 'arena';
-  for (let i = 0; i < playerCount; i++) {
-    const zone = document.createElement('div');
-    zone.className = 'pzone';
-    zone.id = `pzone-${i}`;
-    const head = document.createElement('div');
-    head.className = `pzone-head p${i + 1}`;
-    head.textContent = `PLAYER ${i + 1}`;
-    zone.appendChild(head);
-
-    const wrap = document.createElement('div');
-    wrap.className = `board-wrap p${i + 1}`;
-    wrap.id = `board-wrap-${i}`;
-    const canvas = document.createElement('canvas');
-    canvas.id = `board-canvas-${i}`;
-    wrap.appendChild(canvas);
-    zone.appendChild(wrap);
-
-    const stats = document.createElement('div');
-    stats.className = 'pzone-stats';
-    stats.innerHTML = `
-      <div class="stat"><span class="stat-label">SCORE</span><span class="stat-value score-val" id="score-${i}">000000</span></div>
-      <div class="stat"><span class="stat-label">LINES</span><span class="stat-value lines-val" id="lines-${i}">0</span></div>
-      <div class="stat"><span class="stat-label">LEVEL</span><span class="stat-value level-val" id="level-${i}">1</span></div>
-    `;
-    zone.appendChild(stats);
-    arena.appendChild(zone);
-  }
-  // Side panel for hold/next (solo mode only)
-  if (playerCount === 1) {
-    const side = document.createElement('div');
-    side.className = 'side-panel';
-    // Hold panel
-    const holdPanel = document.createElement('div');
-    holdPanel.className = 'mini-panel';
-    holdPanel.innerHTML = '<div class="mini-label">HOLD</div>';
-    const holdCanvas = document.createElement('canvas');
-    holdCanvas.id = 'hold-canvas';
-    holdCanvas.width = 120;
-    holdCanvas.height = 120;
-    holdPanel.appendChild(holdCanvas);
-    side.appendChild(holdPanel);
-    // Next panel
-    const nextPanel = document.createElement('div');
-    nextPanel.className = 'mini-panel';
-    nextPanel.innerHTML = '<div class="mini-label">NEXT</div>';
-    const nextCanvas = document.createElement('canvas');
-    nextCanvas.id = 'next-canvas';
-    nextCanvas.width = 120;
-    nextCanvas.height = 120;
-    nextPanel.appendChild(nextCanvas);
-    side.appendChild(nextPanel);
-    arena.appendChild(side);
-  }
-  parentEl.appendChild(arena);
-  return arena;
-}
-
-// ---------------------------------------------------------------- audio + FX wiring
+// ---------------------------------------------------------------- audio wiring
 
 function wirePlayerAudio(p) {
   p.on('move', () => audio.move());
@@ -177,136 +123,12 @@ function wirePlayerAudio(p) {
   p.on('softdrop', () => audio.softdrop());
   p.on('hold', () => audio.hold());
   p.on('blocked', () => audio.blocked());
-
-  p.on('harddrop', (d) => {
-    audio.harddrop();
-    // Hard drop particles + trail
-    const canvas = $(`board-canvas-${p.id}`);
-    const boardWrap = $(`board-wrap-${p.id}`);
-    if (canvas && p.piece) {
-      const rect = canvas.getBoundingClientRect();
-      const cell = Math.max(6, Math.floor(rect.width / 10));
-      const color = p.piece.type;
-      if (d && d.dist > 2) {
-        particles.emitHardDropTrail(p.piece.y, p.piece.y + d.dist, p.piece.x, cell, color);
-      }
-      // Impact particles
-      const cx = p.piece.x * cell + cell / 2;
-      const cy = (p.piece.y + 2) * cell + cell / 2;
-      const pColors = PIECE_COLORS[color];
-      if (pColors) {
-        particles.emit(cx, cy, 12, pColors.light, { speedMin: 1, speedMax: 4, lifeMin: 10, lifeMax: 25, type: 'spark', gravity: 0.05 });
-        particles.emit(cx, cy, 6, pColors.glow, { speedMin: 0.5, speedMax: 2, lifeMin: 15, lifeMax: 30, type: 'glow', gravity: 0.02 });
-      }
-    }
-    // Screen shake
-    if (boardWrap && d && d.dist > 3) {
-      screenShake(boardWrap, d.dist > 8 ? 'big' : 'normal');
-    }
-  });
-
-  p.on('lock', (d) => {
-    if (!d.lines) audio.land();
-    // Lock particles on each cell of the locked piece
-    const canvas = $(`board-canvas-${p.id}`);
-    if (canvas && p.piece) {
-      const rect = canvas.getBoundingClientRect();
-      const cell = Math.max(6, Math.floor(rect.width / 10));
-      const m = p.piece.matrix;
-      for (let r = 0; r < m.length; r++) {
-        for (let c = 0; c < m[r].length; c++) {
-          if (!m[r][c]) continue;
-          const px = p.piece.x + c;
-          const py = p.piece.y + r - 2; // offset for HIDDEN rows
-          if (py >= 0 && py < 20) {
-            particles.emitLock(px, py, cell, p.piece.type);
-          }
-        }
-      }
-    }
-  });
-
-  p.on('clear', (d) => {
-    audio.clear(d.count);
-    if (p.id === 0) audio.voiceCombo(d.count);
-
-    const boardWrap = $(`board-wrap-${p.id}`);
-    const canvas = $(`board-canvas-${p.id}`);
-
-    // Clear particles on each cleared row
-    if (canvas && d.count > 0) {
-      const rect = canvas.getBoundingClientRect();
-      const cell = Math.max(6, Math.floor(rect.width / 10));
-      const board = p.board;
-      const clearedRows = board.clearing || [];
-      const isTetris = d.count >= 4;
-      for (const row of clearedRows) {
-        particles.emitClear(row - 2, cell, row, isTetris);
-      }
-    }
-
-    // Screen shake on line clears
-    if (boardWrap) {
-      screenShake(boardWrap, d.count >= 4 ? 'big' : 'normal');
-    }
-
-    // Flash overlay on board
-    if (boardWrap) {
-      const flash = document.createElement('div');
-      flash.className = d.count >= 4 ? 'clear-flash tetris-flash' : 'clear-flash';
-      boardWrap.appendChild(flash);
-      setTimeout(() => flash.remove(), 400);
-    }
-
-    // Score float
-    if (boardWrap && d.gained > 0) {
-      showScoreFloat(boardWrap, `+${d.gained}`);
-    }
-  });
-
-  p.on('tetris', () => {
-    audio.tetris();
-    if (p.id === 0) audio.voiceTetris();
-    // Tetris celebration particles
-    const canvas = $(`board-canvas-${p.id}`);
-    if (canvas) {
-      const rect = canvas.getBoundingClientRect();
-      const cell = Math.max(6, Math.floor(rect.width / 10));
-      particles.emitTetrisCelebration(cell);
-    }
-    // Big combo popup
-    const boardWrap = $(`board-wrap-${p.id}`);
-    if (boardWrap) {
-      showComboPopup(boardWrap, 'TETRIS!', 'tetris');
-      screenShake(boardWrap, 'big');
-    }
-  });
-
-  p.on('combo', (d) => {
-    audio.combo(d.count);
-    if (p.id === 0 && d.count >= 3) audio.voiceComboCount(d.count);
-    const boardWrap = $(`board-wrap-${p.id}`);
-    if (boardWrap && d.count >= 2) {
-      showComboPopup(boardWrap, `${d.count}x COMBO`, 'combo');
-    }
-  });
-
-  p.on('tspin', (d) => {
-    audio.tspin(d.lines);
-    if (p.id === 0) audio.voiceTSpin(d.lines);
-    const boardWrap = $(`board-wrap-${p.id}`);
-    if (boardWrap) {
-      const text = d.lines === 0 ? 'T-SPIN!' : d.lines === 1 ? 'T-SPIN SINGLE!' : d.lines === 2 ? 'T-SPIN DOUBLE!' : 'T-SPIN TRIPLE!';
-      showComboPopup(boardWrap, text, 'tetris');
-      screenShake(boardWrap, 'big');
-    }
-  });
-
-  p.on('backtoback', () => {
-    audio.backtoback();
-    if (p.id === 0) audio.voiceBackToBack();
-  });
-
+  p.on('harddrop', () => audio.harddrop());
+  p.on('lock', (d) => { if (!d.lines) audio.land(); });
+  // Only the human's own clears get an announcer voice — otherwise a bot
+  // match would have the CPU shouting "Tetris!" at itself constantly.
+  p.on('clear', (d) => { audio.clear(d.count); if (p.id === 0) audio.voiceCombo(d.count); });
+  p.on('tetris', () => { audio.tetris(); if (p.id === 0) audio.voiceTetris(); });
   p.on('levelup', (d) => { audio.levelup(); if (p.id === 0) audio.voiceLevelUp(d.level); });
   p.on('topout', () => { audio.gameover(); if (p.id === 0) audio.voiceGameOver(); });
 }
@@ -318,7 +140,37 @@ const bgCtx = bg.getContext('2d');
 let bgStars = [];
 let bgShapes = [];
 
-const BASE_HUE = 258;
+const cityImg = new Image();
+let cityImgReady = false;
+cityImg.onload = () => { cityImgReady = true; };
+cityImg.src = 'assets/bg/night-city.png';
+
+// Draws `img` into the canvas the way CSS `background-size: cover` would —
+// scaled to fill (w,h) fully, centered, cropping whatever overhangs.
+function drawImageCover(ctx, img, w, h) {
+  const ir = img.width / img.height;
+  const cr = w / h;
+  let sw, sh, sx, sy;
+  if (cr > ir) {
+    sw = img.width;
+    sh = sw / cr;
+    sx = 0;
+    sy = (img.height - sh) / 2;
+  } else {
+    sh = img.height;
+    sw = sh * cr;
+    sy = 0;
+    sx = (img.width - sw) / 2;
+  }
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+}
+
+// ---------------------------------------------------------------- color theme
+// The whole scene's ambient hue drifts as your score climbs — same dark
+// arcade look at 0 points, gradually shifting through the spectrum the
+// longer a run goes. Piece colors themselves are untouched (still need to
+// read the board), just the background glow and a few accent glows.
+const BASE_HUE = 258; // matches the original violet background
 let scoreHue = BASE_HUE;
 
 function updateColorTheme(score) {
@@ -333,49 +185,53 @@ function initBackground() {
   };
   resize();
   window.addEventListener('resize', resize);
-  bgStars = Array.from({ length: 120 }, () => ({
+  bgStars = Array.from({ length: 90 }, () => ({
     x: Math.random() * bg.width,
     y: Math.random() * bg.height,
-    r: Math.random() * 1.6 + 0.3,
-    sp: Math.random() * 0.4 + 0.04,
-    twinkle: Math.random() * Math.PI * 2,
-    twinkleSpeed: Math.random() * 0.02 + 0.005
+    r: Math.random() * 1.4 + 0.4,
+    sp: Math.random() * 0.35 + 0.05
   }));
   const types = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
-  bgShapes = Array.from({ length: 16 }, () => ({
+  bgShapes = Array.from({ length: 12 }, () => ({
     type: types[Math.floor(Math.random() * types.length)],
     x: Math.random() * bg.width,
     y: Math.random() * bg.height,
-    sp: Math.random() * 0.25 + 0.05,
+    sp: Math.random() * 0.22 + 0.06,
     rot: Math.random() * Math.PI * 2,
-    size: 14 + Math.random() * 28
+    size: 16 + Math.random() * 26
   }));
 }
 
 function drawBackground() {
   bgCtx.clearRect(0, 0, bg.width, bg.height);
-  const grad = bgCtx.createLinearGradient(0, 0, 0, bg.height);
-  grad.addColorStop(0, `hsl(${scoreHue}, 58%, 7%)`);
-  grad.addColorStop(0.5, `hsl(${(scoreHue + 12) % 360}, 50%, 4%)`);
-  grad.addColorStop(1, `hsl(${(scoreHue + 18) % 360}, 62%, 3%)`);
-  bgCtx.fillStyle = grad;
+
+  // base fill in case the image hasn't finished loading yet
+  bgCtx.fillStyle = '#05030c';
   bgCtx.fillRect(0, 0, bg.width, bg.height);
 
-  // Twinkling stars
+  if (cityImgReady) {
+    drawImageCover(bgCtx, cityImg, bg.width, bg.height);
+  }
+
+  // score-reactive color wash over the skyline — hue drifts via updateColorTheme()
+  bgCtx.save();
+  bgCtx.globalCompositeOperation = 'color';
+  bgCtx.fillStyle = `hsla(${scoreHue}, 70%, 50%, 0.35)`;
+  bgCtx.fillRect(0, 0, bg.width, bg.height);
+  bgCtx.restore();
+
   for (const s of bgStars) {
     s.y -= s.sp;
-    s.twinkle += s.twinkleSpeed;
     if (s.y < 0) { s.y = bg.height; s.x = Math.random() * bg.width; }
-    const alpha = 0.15 + Math.abs(Math.sin(s.twinkle)) * 0.35;
-    bgCtx.fillStyle = `rgba(234,230,255,${alpha})`;
+    bgCtx.fillStyle = `rgba(234,230,255,${0.15 + Math.random() * 0.3})`;
     bgCtx.beginPath();
     bgCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
     bgCtx.fill();
   }
 
   const colors = {
-    I: '#00f0ff', O: '#ffd740', T: '#e040fb', S: '#00e676',
-    Z: '#ff1744', J: '#448aff', L: '#ff9100'
+    I: '#06c7d9', O: '#f8c30d', T: '#ba36ee', S: '#4bc607',
+    Z: '#e21f1e', J: '#1459f6', L: '#f07303'
   };
   for (const sh of bgShapes) {
     sh.y -= sh.sp;
@@ -384,7 +240,7 @@ function drawBackground() {
     bgCtx.save();
     bgCtx.translate(sh.x, sh.y);
     bgCtx.rotate(sh.rot);
-    bgCtx.globalAlpha = 0.08;
+    bgCtx.globalAlpha = 0.12;
     bgCtx.fillStyle = colors[sh.type];
     const s = sh.size;
     const cells = {
@@ -477,7 +333,7 @@ function fallbackCopy(text, done) {
   ta.focus();
   ta.select();
   let ok = false;
-  try { ok = document.execCommand('copy'); } catch (e) { }
+  try { ok = document.execCommand('copy'); } catch (e) { /* ignore */ }
   document.body.removeChild(ta);
   if (ok) done();
   else showToast('COULD NOT COPY — TYPE THE CODE MANUALLY');
@@ -495,7 +351,6 @@ function startGame(playerCount, opts = {}) {
   gameDifficulty = opts.difficulty || settings.difficulty;
   scoreSaved = false;
   updateColorTheme(0);
-  particles.clear();
 
   if (controller) controller.quit();
 
@@ -517,13 +372,6 @@ function startGame(playerCount, opts = {}) {
       if (ev === 'frame') {
         updateArenaHud(controller);
         updateColorTheme(controller.players[0] ? controller.players[0].score : 0);
-        // Render all player canvases
-        for (let i = 0; i < controller.players.length; i++) {
-          const cv = $(`board-canvas-${i}`);
-          if (cv) renderPlayer(controller.players[i], cv);
-        }
-        // Render side panel (hold/next)
-        renderSidePanel(controller);
       }
       if (ev === 'over') handleRoundOver(data);
     },
@@ -534,7 +382,7 @@ function startGame(playerCount, opts = {}) {
 
   controller.players.forEach(wirePlayerAudio);
 
-  buildArenaDOM(playerCount, currentMode);
+  buildArena(controller, currentMode);
   setTopBar(currentMode === 'solo' ? 'solo' : currentMode, DIFFICULTIES[gameDifficulty].label);
   updateTouchpad(controller);
   if (IS_TOUCH) $('touchpad').classList.remove('hidden');
@@ -598,10 +446,13 @@ function handleRoundOver(data) {
     const qualifies = scoreQualifies(p0.score);
     $('gameover-newbest').textContent = isBest ? 'NEW HIGH SCORE!' : '';
     if (isBest) audio.highscore();
-    showGameOver(p0.score, p0.lines, p0.level, isBest);
+    showGameOver({ score: p0.score, lines: p0.lines, level: p0.level, qualifies });
     return;
   }
 
+  // multiplayer / online round — every player who scored gets submitted to
+  // the shared online leaderboard (not just the winner), so friends playing
+  // on other devices/screens all show up.
   audio.victory();
   const winner = data.ranked[0];
   if (winner && winner.score > 0 && scoreQualifies(winner.score)) {
@@ -627,6 +478,9 @@ function handleRoundOver(data) {
       }
     });
   } else {
+    // Online 2P: each device only knows its own player for sure (id 0 is
+    // always "you" locally) — submit just that one to avoid both sides
+    // double-submitting the same match.
     const me = data.ranked.find((p) => p.id === 0);
     if (me && me.score > 0) {
       submitToLeaderboard({
@@ -639,7 +493,7 @@ function handleRoundOver(data) {
       });
     }
   }
-  showVictory(data.ranked);
+  showVictory(data.ranked, currentMode);
   const againBtn = $('overlay-victory').querySelector('[data-action="again"]');
   if (againBtn) againBtn.classList.toggle('hidden', onlineMatch);
 }
@@ -649,6 +503,8 @@ function saveScoreFromOverlay() {
   const name = ($('gameover-name').value || settings.playerName || 'PLAYER').toUpperCase().slice(0, 12);
   const p = controller.players[0];
   const entry = submitScore({ name, score: p.score, lines: p.lines, difficulty: gameDifficulty, mode: 'solo' });
+  // Always try the shared leaderboard too, even if this score didn't crack
+  // the local top 10 — it's a separate, bigger pool of every player.
   submitToLeaderboard({
     name,
     uid: getCurrentUser() && getCurrentUser().uid,
@@ -801,6 +657,8 @@ function sendOnlineFrame() {
 }
 
 online.on('code', (code) => {
+  // Room exists — show the code prominently and let the host share it.
+  // Keep the lobby visible (don't hide it) so the code stays on screen.
   $('online-code').textContent = `CODE: ${code.toUpperCase()}`;
   $('online-status').textContent = 'SHARE THIS CODE — WAITING FOR RIVAL…';
   $('online-lobby').classList.add('room-created');
@@ -887,6 +745,8 @@ async function handleGoogleSignIn() {
   setAccountStatus('OPENING GOOGLE SIGN-IN…');
   const res = await signInGoogle();
   if (!res.ok) setAccountStatus(res.error);
+  // On success this navigates away to Google and back — onAuthChange
+  // picks it up automatically when the page reloads.
 }
 
 async function handleSignOut() {
@@ -915,10 +775,23 @@ function wireMenu() {
     else if (action === 'online') openOnlineLobby();
     else if (action === 'online-copy') copyOnlineCode();
     else if (action === 'pause') togglePause();
-    else if (action === 'resume') { hideOverlay('pause'); controller && controller.resume(); audio.click(); }
-    else if (action === 'restart') { hideOverlay('pause'); startGame(lastStartArgs.count, lastStartArgs.opts); }
-    else if (action === 'again') { hideOverlay('gameover'); hideOverlay('victory'); startGame(lastStartArgs.count, lastStartArgs.opts); }
-    else if (action === 'quit') quitGame();
+    else if (action === 'resume') togglePause();
+    else if (action === 'restart') {
+      const { count, opts } = lastStartArgs;
+      quitGame();
+      startGame(count, opts);
+    }
+    else if (action === 'quit') {
+      if ($('overlay-gameover').classList.contains('open') && !scoreSaved) saveScoreFromOverlay();
+      quitGame();
+    }
+    else if (action === 'again') {
+      if ($('overlay-gameover').classList.contains('open') && !scoreSaved) saveScoreFromOverlay();
+      hideOverlay('gameover');
+      hideOverlay('victory');
+      if (onlineMatch) { online.send('start', { difficulty: gameDifficulty }); startOnlineMatch(gameDifficulty); }
+      else { const { count, opts } = lastStartArgs; startGame(count, opts); }
+    }
     else if (action === 'save-score') saveScoreFromOverlay();
     else if (action === 'online-create') {
       if (!online.supported()) { showToast('ONLINE NEEDS INTERNET'); return; }
@@ -948,6 +821,7 @@ function wireMenu() {
     else if (action === 'acct-signout') handleSignOut();
   });
 
+  // difficulty cards
   document.querySelectorAll('.diff-card').forEach((card) => {
     card.addEventListener('click', () => {
       gameDifficulty = card.dataset.difficulty;
@@ -960,6 +834,7 @@ function wireMenu() {
     });
   });
 
+  // score filters
   document.querySelectorAll('#score-filters .btn-tab').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('#score-filters .btn-tab').forEach((b) => b.classList.remove('active'));
@@ -969,6 +844,7 @@ function wireMenu() {
     });
   });
 
+  // settings
   $('set-sound').addEventListener('click', () => {
     settings.sound = !settings.sound;
     saveSettings(settings);
@@ -1037,8 +913,12 @@ function init() {
   window.addEventListener('orientationchange', () => {
     setTimeout(fitBoard, 120);
   });
+
 }
 
+// Handles ?screen=... launch params — used by the manifest's "shortcuts"
+// (home-screen long-press menu / right-click on desktop) so each shortcut
+// actually lands somewhere real instead of just reopening the main menu.
 function handleLaunchParams() {
   const params = new URLSearchParams(window.location.search);
   const target = params.get('screen');
@@ -1052,6 +932,7 @@ function handleLaunchParams() {
     syncSettingsUI();
     showScreen('settings');
   }
+  // Clean the URL so refresh/reshare doesn't keep re-triggering the shortcut.
   window.history.replaceState({}, '', window.location.pathname);
 }
 
