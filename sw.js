@@ -1,12 +1,13 @@
 // sw.js — app-shell caching so Jemz Tetris installs as a PWA and works offline.
 // Bump CACHE_NAME whenever a shipped file changes so clients pick up the update.
-const CACHE_NAME = 'jemz-tetris-v3';
+const CACHE_NAME = 'jemz-tetris-v4';
 
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
   './styles/style.css',
+  './assets/bg/night-city.png',
   './src/audio.js',
   './src/auth.js',
   './src/board.js',
