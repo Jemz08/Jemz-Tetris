@@ -165,6 +165,30 @@ class AudioEngine {
     return this.ctx ? this.ctx.currentTime : 0;
   }
 
+  // ---- announcer voice (browser text-to-speech, no audio files) --------
+
+  speak(text, opts = {}) {
+    if (!this.sound) return;
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    try {
+      window.speechSynthesis.cancel(); // don't let callouts queue up and stack
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = opts.rate || 1.1;
+      u.pitch = opts.pitch || 1.15;
+      u.volume = Math.max(0, Math.min(1, this.volume + 0.25));
+      window.speechSynthesis.speak(u);
+    } catch (e) { /* speech synthesis unsupported/blocked — fail silently */ }
+  }
+
+  voiceTetris() { this.speak('Tetris!', { pitch: 1.35, rate: 1.05 }); }
+  voiceCombo(lines) {
+    if (lines === 3) this.speak('Triple!', { pitch: 1.2 });
+    else if (lines === 2) this.speak('Double!', { pitch: 1.1 });
+  }
+  voiceLevelUp(level) { this.speak(`Level ${level}!`, { pitch: 1.15 }); }
+  voiceGameOver() { this.speak('Game over', { pitch: 0.85, rate: 0.95 }); }
+  voiceVictory() { this.speak('Victory!', { pitch: 1.2 }); }
+
   // ---- background music -------------------------------------------------
 
   startMusic() {

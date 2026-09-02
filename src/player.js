@@ -2,7 +2,7 @@
 // Emits events for the UI and audio systems to react to.
 
 import { Board } from './board.js';
-import { BagRandomizer, createPiece, clonePiece, rotateMatrix } from './pieces.js';
+import { BagRandomizer, createPiece, clonePiece, rotateMatrix, KICKS_JLSTZ, KICKS_I } from './pieces.js';
 import {
   dropIntervalMs,
   linesScore,
@@ -17,6 +17,7 @@ export class Player {
     this.id = config.id || 0;
     this.difficulty = config.difficulty || 'moderate';
     this.remote = !!config.remote; // online opponent: no local input
+    this.bot = !!config.bot; // CPU-controlled opponent
     this.board = new Board();
     this.bag = new BagRandomizer();
     this.queue = [];
@@ -144,16 +145,20 @@ export class Player {
   rotate(dir) {
     if (this.state !== 'playing' || !this.piece) return false;
     const rotated = rotateMatrix(this.piece.matrix, dir);
-    const kicks = [0, -1, 1, -2, 2];
-    for (const kx of kicks) {
-      if (!this.board.collides(rotated, this.piece.x + kx, this.piece.y)) {
+    const kicks = this.piece.type === 'I' ? KICKS_I : KICKS_JLSTZ;
+    for (const [kx, ky] of kicks) {
+      const nx = this.piece.x + kx;
+      const ny = this.piece.y + ky;
+      if (!this.board.collides(rotated, nx, ny)) {
         this.piece.matrix = rotated;
-        this.piece.x += kx;
+        this.piece.x = nx;
+        this.piece.y = ny;
         this._updateGhost();
         this.emit('rotate');
         return true;
       }
     }
+    this.emit('blocked');
     return false;
   }
 

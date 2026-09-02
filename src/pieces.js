@@ -54,6 +54,21 @@ const MATRICES = {
 
 const SIZE = { I: 4, O: 2, T: 3, S: 3, Z: 3, J: 3, L: 3 };
 
+// Kick offsets tried in order after a rotation would otherwise collide —
+// this is what lets a piece "squeeze" sideways or bump up/down through a
+// gap instead of rotation just failing against a wall or the stack, the
+// way rotation works in the original/guideline Tetris games.
+// [dx, dy] — dy positive = down (matches this board's y-down coordinates).
+export const KICKS_JLSTZ = [
+  [0, 0], [-1, 0], [1, 0], [0, -1], [0, 1],
+  [-1, -1], [1, -1], [-1, 1], [1, 1],
+  [-2, 0], [2, 0]
+];
+export const KICKS_I = [
+  [0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0],
+  [0, -1], [0, 1], [-1, -1], [1, -1], [-2, -1], [2, -1]
+];
+
 export function createPiece(type) {
   return {
     type,

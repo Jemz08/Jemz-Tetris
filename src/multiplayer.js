@@ -3,6 +3,7 @@
 
 import { Player } from './player.js';
 import { HIDDEN } from './board.js';
+import { BotAI } from './bot.js';
 
 export class GameController {
   constructor(opts) {
@@ -17,13 +18,17 @@ export class GameController {
     this.ended = false;
     this.rankCounter = this.playerCount;
     this._keys = new Map();
+    this.bots = new Map(); // playerIdx -> BotAI
     for (let i = 0; i < this.playerCount; i++) {
+      const isBot = !!(opts.botPlayers && opts.botPlayers.includes(i));
       this.players.push(new Player({
         id: i,
         name: this.names[i] || `P${i + 1}`,
         difficulty: this.difficulty,
-        remote: !!(opts.remotePlayers && opts.remotePlayers.includes(i))
+        remote: !!(opts.remotePlayers && opts.remotePlayers.includes(i)),
+        bot: isBot
       }));
+      if (isBot) this.bots.set(i, new BotAI(this.difficulty));
     }
   }
 
@@ -57,6 +62,10 @@ export class GameController {
         }
       }
       if (p.topOut && p.finishOrder === -1) this._onTopOut(p);
+    }
+    for (const [idx, ai] of this.bots) {
+      const p = this.players[idx];
+      if (p && p.state === 'playing') ai.update(dt, p);
     }
     this.onFrame(dt);
     this.onEvent('frame', { players: this.players });
@@ -120,7 +129,7 @@ export class GameController {
   press(playerIdx, action) {
     if (this.paused || this.ended) return;
     const p = this.players[playerIdx];
-    if (!p || p.state !== 'playing' || p.remote) return;
+    if (!p || p.state !== 'playing' || p.remote || p.bot) return;
     if (action === 'left' || action === 'right') {
       const key = `${playerIdx}:${action}`;
       if (this._keys.has(key)) return;

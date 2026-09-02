@@ -151,12 +151,12 @@ export function renderPlayer(player, canvas, opts = {}) {
     ctx.fillText('OVER', w / 2, h / 2 + cell * 0.6);
   }
 
-  // online opponent name + latency-neutral status
-  if (player.remote && !player.finished) {
+  // online opponent / CPU opponent name tag
+  if ((player.remote || player.bot) && !player.finished) {
     ctx.fillStyle = 'rgba(154,143,192,0.9)';
     ctx.font = `${Math.round(cell * 0.9)}px 'Press Start 2P', monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('RIVAL', w / 2, cell * 1.2);
+    ctx.fillText(player.remote ? 'RIVAL' : 'BOT', w / 2, cell * 1.2);
   }
 
   if (opts.callback) opts.callback();
@@ -289,7 +289,7 @@ export function updateArenaHud(controller) {
       if (p.topOut) status.textContent = 'GAME OVER';
       else if (p.finished) status.textContent = `#${p.finishOrder}`;
       else if (p.state === 'paused') status.textContent = 'PAUSED';
-      else status.textContent = p.remote ? 'ONLINE' : '';
+      else status.textContent = p.remote ? 'ONLINE' : (p.bot ? 'CPU' : '');
     }
 
     const canvas = document.querySelector(`.pzone[data-p="${i}"] .board-canvas`);
@@ -308,7 +308,7 @@ export function setTopBar(mode, difficultyLabel) {
   const bar = $('game-topbar');
   if (!bar) return;
   bar.innerHTML = '';
-  const left = el('span', 'topbar-item', mode === 'solo' ? 'SOLO' : `${mode} PLAYERS`);
+  const left = el('span', 'topbar-item', mode === 'solo' ? 'SOLO' : (mode === 'bot' ? 'VS BOT' : `${mode} PLAYERS`));
   const mid = el('span', 'topbar-item topbar-diff', difficultyLabel);
   const btn = el('button', 'btn btn-small', 'PAUSE');
   btn.type = 'button';
@@ -560,7 +560,7 @@ export function prettyKey(code) {
 
 export function updateTouchpad(controller) {
   const pad = $('touchpad');
-  const multi = controller && controller.playerCount > 1;
+  const multi = controller && controller.players.filter((p) => !p.bot && !p.remote).length > 1;
   const sel = $('touchpad-select');
   if (sel) {
     sel.classList.toggle('hidden', !multi);

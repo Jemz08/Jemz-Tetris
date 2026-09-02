@@ -125,10 +125,12 @@ function wirePlayerAudio(p) {
   p.on('blocked', () => audio.blocked());
   p.on('harddrop', () => audio.harddrop());
   p.on('lock', (d) => { if (!d.lines) audio.land(); });
-  p.on('clear', (d) => audio.clear(d.count));
-  p.on('tetris', () => audio.tetris());
-  p.on('levelup', () => audio.levelup());
-  p.on('topout', () => audio.gameover());
+  // Only the human's own clears get an announcer voice — otherwise a bot
+  // match would have the CPU shouting "Tetris!" at itself constantly.
+  p.on('clear', (d) => { audio.clear(d.count); if (p.id === 0) audio.voiceCombo(d.count); });
+  p.on('tetris', () => { audio.tetris(); if (p.id === 0) audio.voiceTetris(); });
+  p.on('levelup', (d) => { audio.levelup(); if (p.id === 0) audio.voiceLevelUp(d.level); });
+  p.on('topout', () => { audio.gameover(); if (p.id === 0) audio.voiceGameOver(); });
 }
 
 // ---------------------------------------------------------------- background
@@ -137,6 +139,19 @@ const bg = $('bg-canvas');
 const bgCtx = bg.getContext('2d');
 let bgStars = [];
 let bgShapes = [];
+
+// ---------------------------------------------------------------- color theme
+// The whole scene's ambient hue drifts as your score climbs — same dark
+// arcade look at 0 points, gradually shifting through the spectrum the
+// longer a run goes. Piece colors themselves are untouched (still need to
+// read the board), just the background glow and a few accent glows.
+const BASE_HUE = 258; // matches the original violet background
+let scoreHue = BASE_HUE;
+
+function updateColorTheme(score) {
+  scoreHue = (BASE_HUE + (score || 0) / 18) % 360;
+  document.documentElement.style.setProperty('--score-hue', scoreHue.toFixed(1));
+}
 
 function initBackground() {
   const resize = () => {
@@ -164,10 +179,10 @@ function initBackground() {
 
 function drawBackground() {
   bgCtx.clearRect(0, 0, bg.width, bg.height);
-  // deep gradient
+  // deep gradient — hue drifts with score via updateColorTheme()
   const grad = bgCtx.createLinearGradient(0, 0, 0, bg.height);
-  grad.addColorStop(0, '#0d0720');
-  grad.addColorStop(1, '#070310');
+  grad.addColorStop(0, `hsl(${scoreHue}, 58%, 8%)`);
+  grad.addColorStop(1, `hsl(${(scoreHue + 18) % 360}, 62%, 3%)`);
   bgCtx.fillStyle = grad;
   bgCtx.fillRect(0, 0, bg.width, bg.height);
 
@@ -214,6 +229,7 @@ function drawBackground() {
 // ---------------------------------------------------------------- navigation
 
 function goMenu() {
+  updateColorTheme(0);
   hideOverlay('pause');
   hideOverlay('gameover');
   hideOverlay('victory');
@@ -246,7 +262,6 @@ function syncSettingsUI() {
   $('set-name').value = settings.playerName;
   document.getElementById('crt').classList.toggle('on', settings.crt);
   buildControlsTable($('controls-table'), settings.controls, onRemap);
-  buildMultiControls();
   buildHowtoControls();
   renderScores();
   document.querySelectorAll('.diff-card').forEach((card) => {
@@ -260,11 +275,8 @@ function buildHowtoControls() {
   buildControlsTable(wrap, settings.controls, () => {});
 }
 
-function buildMultiControls() {
-  const wrap = $('multi-controls');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-  buildControlsTable(wrap, settings.controls, () => {});
+function startVsBot(difficulty) {
+  startGame(2, { bot: true, difficulty: difficulty || settings.difficulty, name: settings.playerName || 'YOU' });
 }
 
 function copyOnlineCode() {
@@ -295,11 +307,16 @@ function fallbackCopy(text, done) {
 
 // ---------------------------------------------------------------- game lifecycle
 
+let lastStartArgs = { count: 1, opts: {} };
+
 function startGame(playerCount, opts = {}) {
+  lastStartArgs = { count: playerCount, opts };
   onlineMatch = !!opts.online;
-  currentMode = playerCount === 1 ? 'solo' : String(playerCount);
+  const botMatch = !!opts.bot;
+  currentMode = playerCount === 1 ? 'solo' : (botMatch ? 'bot' : String(playerCount));
   gameDifficulty = opts.difficulty || settings.difficulty;
   scoreSaved = false;
+  updateColorTheme(0);
 
   if (controller) controller.quit();
 
@@ -307,6 +324,7 @@ function startGame(playerCount, opts = {}) {
   for (let i = 0; i < playerCount; i++) {
     if (i === 0) names.push(opts.name || settings.playerName || 'P1');
     else if (opts.online) names.push(opts.rivalName || 'RIVAL');
+    else if (botMatch) names.push(`BOT · ${DIFFICULTIES[gameDifficulty].label}`);
     else names.push(`P${i + 1}`);
   }
 
@@ -315,8 +333,12 @@ function startGame(playerCount, opts = {}) {
     difficulty: gameDifficulty,
     names,
     remotePlayers: opts.online ? [1] : [],
+    botPlayers: botMatch ? [1] : [],
     onEvent: (ev, data) => {
-      if (ev === 'frame') updateArenaHud(controller);
+      if (ev === 'frame') {
+        updateArenaHud(controller);
+        updateColorTheme(controller.players[0] ? controller.players[0].score : 0);
+      }
       if (ev === 'over') handleRoundOver(data);
     },
     onFrame: (dt) => {
@@ -714,23 +736,27 @@ function wireMenu() {
     else if (action === 'scores') { renderScores(); showScreen('scores'); }
     else if (action === 'settings') { syncSettingsUI(); showScreen('settings'); }
     else if (action === 'howto') { buildHowtoControls(); showScreen('howto'); }
-    else if (action === 'multi') { buildMultiControls(); showScreen('multi'); }
+    else if (action === 'vsbot') showScreen('vsbot');
+    else if (action === 'vsbot-start') startVsBot(el.dataset.difficulty);
     else if (action === 'online') openOnlineLobby();
     else if (action === 'online-copy') copyOnlineCode();
     else if (action === 'pause') togglePause();
     else if (action === 'resume') togglePause();
-    else if (action === 'restart') { quitGame(); startGame(parseInt(currentMode === 'solo' ? '1' : currentMode, 10)); }
+    else if (action === 'restart') {
+      const { count, opts } = lastStartArgs;
+      quitGame();
+      startGame(count, opts);
+    }
     else if (action === 'quit') {
       if ($('overlay-gameover').classList.contains('open') && !scoreSaved) saveScoreFromOverlay();
       quitGame();
     }
     else if (action === 'again') {
       if ($('overlay-gameover').classList.contains('open') && !scoreSaved) saveScoreFromOverlay();
-      const count = currentMode === 'solo' ? 1 : parseInt(currentMode, 10);
       hideOverlay('gameover');
       hideOverlay('victory');
       if (onlineMatch) { online.send('start', { difficulty: gameDifficulty }); startOnlineMatch(gameDifficulty); }
-      else startGame(count);
+      else { const { count, opts } = lastStartArgs; startGame(count, opts); }
     }
     else if (action === 'save-score') saveScoreFromOverlay();
     else if (action === 'online-create') {
