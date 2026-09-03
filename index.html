@@ -182,6 +182,21 @@
         <p class="setting-note">Click a key to change it, then press the new key. Player 1 keys also control the touch pad target when playing together on one device.</p>
         <div id="controls-table"></div>
 
+        <h3 class="setting-subtitle">INPUT TIMING</h3>
+        <p class="setting-note">DAS = delayed auto-shift (how long before auto-repeat kicks in). ARR = auto-repeat rate (speed of auto-repeat). Lock delay = how long a piece stays on the ground before locking. Lower values feel snappier.</p>
+        <div class="setting-row">
+          <span class="setting-label">DAS <span id="das-value" class="dim">10 frames (167ms)</span></span>
+          <input type="range" id="set-das" min="1" max="64" value="10" aria-label="DAS delay in frames">
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">ARR <span id="arr-value" class="dim">1 frame (17ms)</span></span>
+          <input type="range" id="set-arr" min="1" max="64" value="1" aria-label="ARR repeat rate in frames">
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">LOCK DELAY <span id="lock-value" class="dim">500ms</span></span>
+          <input type="range" id="set-lock" min="100" max="1500" step="50" value="500" aria-label="Lock delay in milliseconds">
+        </div>
+
         <h3 class="setting-subtitle">DATA</h3>
         <button class="btn btn-danger" id="btn-reset-data" type="button">RESET SAVED DATA</button>
 
