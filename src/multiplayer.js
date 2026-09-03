@@ -1,9 +1,14 @@
 // GameController: runs 1..4 local players on one shared animation loop,
 // handles pause, DAS auto-repeat, ranking and end-of-round logic.
+//
+// DAS/ARR values are configurable (tetr.io-style slider settings).
+// Default: DAS=10 frames (167ms), ARR=1 frame (17ms).
 
 import { Player } from './player.js';
 import { HIDDEN } from './board.js';
 import { BotAI } from './bot.js';
+
+const FRAME_MS = 1000 / 60; // ms per frame at 60fps
 
 export class GameController {
   constructor(opts) {
@@ -11,23 +16,33 @@ export class GameController {
     this.difficulty = opts.difficulty || 'moderate';
     this.names = opts.names || [];
     this.onEvent = opts.onEvent || (() => {});
-    this.onFrame = opts.onFrame || (() => {}); // used by online sync
+    this.onFrame = opts.onFrame || (() => {});
     this.players = [];
     this.running = false;
     this.paused = false;
     this.ended = false;
     this.rankCounter = this.playerCount;
     this._keys = new Map();
-    this.bots = new Map(); // playerIdx -> BotAI
+    this.bots = new Map();
+
+    // DAS/ARR configurable (frames → ms conversion)
+    this.dasFrames = opts.dasFrames || 10;
+    this.arrFrames = opts.arrFrames || 1;
+
     for (let i = 0; i < this.playerCount; i++) {
       const isBot = !!(opts.botPlayers && opts.botPlayers.includes(i));
-      this.players.push(new Player({
+      const player = new Player({
         id: i,
         name: this.names[i] || `P${i + 1}`,
         difficulty: this.difficulty,
         remote: !!(opts.remotePlayers && opts.remotePlayers.includes(i)),
         bot: isBot
-      }));
+      });
+      // Apply lock delay from settings
+      if (opts.lockDelay != null) {
+        player.lockDelay = opts.lockDelay;
+      }
+      this.players.push(player);
       if (isBot) this.bots.set(i, new BotAI(this.difficulty));
     }
   }
@@ -151,21 +166,24 @@ export class GameController {
     }
   }
 
-  // DAS: after 150ms of holding, repeat the move every 45ms.
+  // DAS/ARR: configurable via this.dasFrames and this.arrFrames.
   dasTick(dt) {
+    const dasMs = this.dasFrames * FRAME_MS;
+    const arrMs = this.arrFrames * FRAME_MS;
+
     for (const [key, state] of this._keys) {
       const sep = key.indexOf(':');
       const playerIdx = +key.slice(0, sep);
       const action = key.slice(sep + 1);
       state.time += dt;
-      if (state.time < 150) continue;
+      if (state.time < dasMs) continue;
       if (!state.repeated) {
         state.repeated = true;
         state.acc = 0;
       }
       state.acc += dt;
-      while (state.acc >= 45) {
-        state.acc -= 45;
+      while (state.acc >= arrMs) {
+        state.acc -= arrMs;
         const p = this.players[playerIdx];
         if (!p || p.state !== 'playing') break;
         if (action === 'left') p.moveLeft();

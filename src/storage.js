@@ -13,12 +13,16 @@ export const DEFAULT_SETTINGS = {
   crt: true,
   difficulty: 'moderate',
   playerName: 'PLAYER',
+  // Tetr.io-style input settings
+  das: 10,         // Delayed Auto Shift: frames before DAS kicks in (1-64)
+  arr: 1,          // Auto Repeat Rate: frames between repeated moves (1-64)
+  lockDelay: 500,  // Lock delay in milliseconds (100-1500)
   controls: {
     // per player default key map (KeyboardEvent.code)
-    p0: { left: 'ArrowLeft', right: 'ArrowRight', rotate: 'ArrowUp', softdrop: 'ArrowDown', harddrop: 'Space', hold: 'KeyC' },
-    p1: { left: 'KeyA', right: 'KeyD', rotate: 'KeyW', softdrop: 'KeyS', harddrop: 'KeyF', hold: 'KeyQ' },
-    p2: { left: 'KeyJ', right: 'KeyL', rotate: 'KeyI', softdrop: 'KeyK', harddrop: 'KeyH', hold: 'KeyU' },
-    p3: { left: 'Numpad4', right: 'Numpad6', rotate: 'Numpad8', softdrop: 'Numpad5', harddrop: 'Numpad7', hold: 'Numpad9' }
+    p0: { left: 'ArrowLeft', right: 'ArrowRight', rotate: 'ArrowUp', softdrop: 'ArrowDown', harddrop: 'Space', hold: 'KeyC', rotateCCW: 'KeyZ' },
+    p1: { left: 'KeyA', right: 'KeyD', rotate: 'KeyW', softdrop: 'KeyS', harddrop: 'KeyF', hold: 'KeyQ', rotateCCW: 'KeyE' },
+    p2: { left: 'KeyJ', right: 'KeyL', rotate: 'KeyI', softdrop: 'KeyK', harddrop: 'KeyH', hold: 'KeyU', rotateCCW: 'KeyO' },
+    p3: { left: 'Numpad4', right: 'Numpad6', rotate: 'Numpad8', softdrop: 'Numpad5', harddrop: 'Numpad7', hold: 'Numpad9', rotateCCW: 'Numpad0' }
   }
 };
 
@@ -44,7 +48,9 @@ export function loadSettings() {
   const saved = read(KEYS.settings, {});
   const out = { ...DEFAULT_SETTINGS };
   for (const k of Object.keys(DEFAULT_SETTINGS)) {
-    if (saved[k] !== undefined) out[k] = saved[k];
+    if (saved[k] !== undefined && typeof saved[k] === typeof DEFAULT_SETTINGS[k]) {
+      out[k] = saved[k];
+    }
   }
   if (saved.controls) {
     out.controls = { ...DEFAULT_SETTINGS.controls, ...saved.controls };

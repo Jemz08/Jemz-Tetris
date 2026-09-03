@@ -131,6 +131,10 @@ function wirePlayerAudio(p) {
   p.on('tetris', () => { audio.tetris(); if (p.id === 0) audio.voiceTetris(); });
   p.on('levelup', (d) => { audio.levelup(); if (p.id === 0) audio.voiceLevelUp(d.level); });
   p.on('topout', () => { audio.gameover(); if (p.id === 0) audio.voiceGameOver(); });
+  p.on('tspin', (d) => { if (p.id === 0) audio.rotate(); });
+  p.on('announce', (d) => {
+    if (p.id === 0 && d.text) showToast(d.text);
+  });
 }
 
 // ---------------------------------------------------------------- background
@@ -297,6 +301,22 @@ function syncSettingsUI() {
   document.getElementById('crt').classList.toggle('on', settings.crt);
   buildControlsTable($('controls-table'), settings.controls, onRemap);
   buildHowtoControls();
+  // DAS/ARR/Lock Delay sliders
+  const dasEl = $('set-das');
+  const arrEl = $('set-arr');
+  const lockEl = $('set-lock');
+  if (dasEl) {
+    dasEl.value = settings.das;
+    $('das-value').textContent = `${settings.das} frames (${Math.round(settings.das * 1000 / 60)}ms)`;
+  }
+  if (arrEl) {
+    arrEl.value = settings.arr;
+    $('arr-value').textContent = `${settings.arr} frame${settings.arr > 1 ? 's' : ''} (${Math.round(settings.arr * 1000 / 60)}ms)`;
+  }
+  if (lockEl) {
+    lockEl.value = settings.lockDelay;
+    $('lock-value').textContent = `${settings.lockDelay}ms`;
+  }
   renderScores();
   document.querySelectorAll('.diff-card').forEach((card) => {
     card.classList.toggle('active', card.dataset.difficulty === gameDifficulty);
@@ -366,6 +386,9 @@ function startGame(playerCount, opts = {}) {
     playerCount,
     difficulty: gameDifficulty,
     names,
+    dasFrames: settings.das,
+    arrFrames: settings.arr,
+    lockDelay: settings.lockDelay,
     remotePlayers: opts.online ? [1] : [],
     botPlayers: botMatch ? [1] : [],
     onEvent: (ev, data) => {
@@ -523,7 +546,7 @@ function saveScoreFromOverlay() {
 
 // ---------------------------------------------------------------- input
 
-const ACTION_KEYS = ['left', 'right', 'rotate', 'softdrop', 'harddrop', 'hold'];
+const ACTION_KEYS = ['left', 'right', 'rotate', 'rotateCCW', 'softdrop', 'harddrop', 'hold'];
 
 function playerForCode(code) {
   for (let i = 0; i < 4; i++) {
@@ -873,6 +896,30 @@ function wireMenu() {
     saveSettings(settings);
     audio.setVolume(settings.volume);
     $('volume-value').textContent = `${e.target.value}%`;
+  });
+  // DAS slider
+  $('set-das').addEventListener('input', (e) => {
+    settings.das = Number(e.target.value);
+    saveSettings(settings);
+    syncSettingsUI();
+    if (controller) { controller.dasFrames = settings.das; }
+  });
+  // ARR slider
+  $('set-arr').addEventListener('input', (e) => {
+    settings.arr = Number(e.target.value);
+    saveSettings(settings);
+    syncSettingsUI();
+    if (controller) { controller.arrFrames = settings.arr; }
+  });
+  // Lock delay slider
+  $('set-lock').addEventListener('input', (e) => {
+    settings.lockDelay = Number(e.target.value);
+    saveSettings(settings);
+    syncSettingsUI();
+    // Apply to current player in real time
+    if (controller) {
+      controller.players.forEach((p) => { p.lockDelay = settings.lockDelay; });
+    }
   });
   $('set-name').addEventListener('change', (e) => {
     settings.playerName = (e.target.value || 'PLAYER').toUpperCase().slice(0, 12);

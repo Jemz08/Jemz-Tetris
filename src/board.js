@@ -1,4 +1,5 @@
-// Board model: 10 x 20 grid, collision, line clearing, lock-flash animation.
+// Board model: 10 x 22 grid (20 visible + 2 hidden), collision, line clearing,
+// lock-flash animation, and perfect-clear detection.
 
 export const COLS = 10;
 export const ROWS = 20;
@@ -91,6 +92,16 @@ export class Board {
 
   isRowFlashing(y) {
     return this.clearing.includes(y);
+  }
+
+  // Perfect clear: every visible cell is empty (no locked blocks remain).
+  isPerfectClear() {
+    for (let y = HIDDEN; y < ROWS + HIDDEN; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (this.grid[y][x]) return false;
+      }
+    }
+    return true;
   }
 
   // Snapshot used for online sync.

@@ -254,6 +254,9 @@ export function buildArena(controller, mode) {
     const linesEl = stat('LINES', '0', 'lines');
     const levelEl = stat('LEVEL', '1', 'level');
     const piecesEl = stat('PIECES', '0', 'pieces');
+    // Combo counter (hidden when 0)
+    const comboEl = stat('COMBO', '', 'combo');
+    comboEl.closest('.stat').style.display = 'none';
     zone.append(header, boardWrap, stats);
 
     // solo side panel with hold / next
@@ -310,6 +313,18 @@ export function updateArenaHud(controller) {
       else if (p.finished) status.textContent = `#${p.finishOrder}`;
       else if (p.state === 'paused') status.textContent = 'PAUSED';
       else status.textContent = p.remote ? 'ONLINE' : (p.bot ? 'CPU' : '');
+    }
+
+    // Combo display
+    const comboNode = $(`stat-combo-${i}`);
+    const comboStat = comboNode && comboNode.closest('.stat');
+    if (comboStat) {
+      if (p.combo > 1) {
+        comboStat.style.display = '';
+        comboNode.textContent = String(p.combo);
+      } else {
+        comboStat.style.display = 'none';
+      }
     }
 
     const canvas = document.querySelector(`.pzone[data-p="${i}"] .board-canvas`);
@@ -528,7 +543,8 @@ export function buildControlsTable(container, controls, onRemap) {
   const actions = [
     ['left', 'MOVE LEFT'],
     ['right', 'MOVE RIGHT'],
-    ['rotate', 'ROTATE'],
+    ['rotate', 'ROTATE CW'],
+    ['rotateCCW', 'ROTATE CCW'],
     ['softdrop', 'SOFT DROP'],
     ['harddrop', 'HARD DROP'],
     ['hold', 'HOLD']

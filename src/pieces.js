@@ -1,4 +1,4 @@
-// Tetromino definitions, rotation and the 7-bag randomizer.
+// Tetromino definitions, SRS rotation system and the 7-bag randomizer.
 // Seven standard pieces: I O T S Z J L
 
 export const PIECE_TYPES = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
@@ -54,20 +54,81 @@ const MATRICES = {
 
 const SIZE = { I: 4, O: 2, T: 3, S: 3, Z: 3, J: 3, L: 3 };
 
-// Kick offsets tried in order after a rotation would otherwise collide —
-// this is what lets a piece "squeeze" sideways or bump up/down through a
-// gap instead of rotation just failing against a wall or the stack, the
-// way rotation works in the original/guideline Tetris games.
-// [dx, dy] — dy positive = down (matches this board's y-down coordinates).
-export const KICKS_JLSTZ = [
-  [0, 0], [-1, 0], [1, 0], [0, -1], [0, 1],
-  [-1, -1], [1, -1], [-1, 1], [1, 1],
-  [-2, 0], [2, 0]
-];
-export const KICKS_I = [
-  [0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0],
-  [0, -1], [0, 1], [-1, -1], [1, -1], [-2, -1], [2, -1]
-];
+// ---- SRS rotation system ------------------------------------------------
+// Official Super Rotation System kick tables per the Tetris Guideline.
+// Each piece tracks a rotationState (0-3) that determines the actual kick
+// offsets rather than just "was it clockwise?".
+
+// JLSTZ rotation states: 0=spawn, 1=CW, 2=180, 3=CCW
+// I rotation states:     0=horizontal, 1=CW vertical, 2=horizontal flipped, 3=CCW vertical
+const SRS_STATE = {
+  I: [0, 1, 2, 3],
+  O: [0, 0, 0, 0],
+  T: [0, 1, 2, 3],
+  S: [0, 1, 2, 3],
+  Z: [0, 1, 2, 3],
+  J: [0, 1, 2, 3],
+  L: [0, 1, 2, 3]
+};
+
+// SRS_OFFSETS[piece][rotationState] = [ [CW offsets], [CCW offsets] ]
+// Each entry is an array of [dx, dy] offsets to try, with [0,0] first.
+// dy > 0 = down (y-down coordinate system used by this board).
+const SRS_OFFSETS = {
+  JLSTZ: [
+    // State 0 (spawn)
+    [[[0,0], [-1,0], [-1,+1], [0,-2], [-1,-2]],
+     [[0,0], [+1,0], [+1,-1], [0,+2], [+1,+2]]],
+    // State 1 (CW)
+    [[[0,0], [+1,0], [+1,-1], [0,+2], [+1,+2]],
+     [[0,0], [+1,0], [+1,+1], [0,-2], [+1,-2]]],
+    // State 2 (180)
+    [[[0,0], [+1,0], [+1,+1], [0,-2], [+1,-2]],
+     [[0,0], [-1,0], [-1,-1], [0,+2], [-1,+2]]],
+    // State 3 (CCW)
+    [[[0,0], [-1,0], [-1,+1], [0,-2], [-1,-2]],
+     [[0,0], [-1,0], [-1,-1], [0,+2], [-1,+2]]]
+  ],
+  I: [
+    // State 0 (horizontal)
+    [[[0,0], [-2,0], [+1,0], [-2,-1], [+1,+2]],
+     [[0,0], [-1,0], [+2,0], [-1,+2], [+2,-1]]],
+    // State 1 (CW vertical)
+    [[[0,0], [-1,0], [+2,0], [-1,+2], [+2,-1]],
+     [[0,0], [+2,0], [-1,0], [+2,+1], [-1,-2]]],
+    // State 2 (horizontal flipped)
+    [[[0,0], [+2,0], [-1,0], [+2,+1], [-1,-2]],
+     [[0,0], [+1,0], [-2,0], [+1,-2], [-2,+1]]],
+    // State 3 (CCW vertical)
+    [[[0,0], [+1,0], [-2,0], [+1,-2], [-2,+1]],
+     [[0,0], [-2,0], [+1,0], [-2,-1], [+1,+2]]]
+  ],
+  O: [
+    [[[0,0], [0,0], [0,0], [0,0], [0,0]],
+     [[0,0], [0,0], [0,0], [0,0], [0,0]]],
+    [[[0,0], [0,0], [0,0], [0,0], [0,0]],
+     [[0,0], [0,0], [0,0], [0,0], [0,0]]],
+    [[[0,0], [0,0], [0,0], [0,0], [0,0]],
+     [[0,0], [0,0], [0,0], [0,0], [0,0]]],
+    [[[0,0], [0,0], [0,0], [0,0], [0,0]],
+     [[0,0], [0,0], [0,0], [0,0], [0,0]]]
+  ]
+};
+
+// Get the SRS kick table for a given piece type and rotation.
+// dir > 0 = clockwise, dir < 0 = counter-clockwise.
+export function getSrsKicks(type, state, dir) {
+  const table = type === 'I' ? SRS_OFFSETS.I
+    : type === 'O' ? SRS_OFFSETS.O
+    : SRS_OFFSETS.JLSTZ;
+  const dirIdx = dir > 0 ? 0 : 1;
+  return table[state][dirIdx];
+}
+
+// Next rotation state after rotating in the given direction.
+export function nextRotationState(state, dir) {
+  return ((state + (dir > 0 ? 1 : 3)) % 4);
+}
 
 export function createPiece(type) {
   return {
@@ -76,7 +137,8 @@ export function createPiece(type) {
     matrix: MATRICES[type].map((row) => row.slice()),
     size: SIZE[type],
     x: 3,
-    y: type === 'O' ? 0 : -1
+    y: type === 'O' ? 0 : -1,
+    rotationState: 0
   };
 }
 
@@ -108,7 +170,8 @@ export function clonePiece(piece) {
     matrix: piece.matrix.map((r) => r.slice()),
     size: piece.size,
     x: piece.x,
-    y: piece.y
+    y: piece.y,
+    rotationState: piece.rotationState
   };
 }
 
